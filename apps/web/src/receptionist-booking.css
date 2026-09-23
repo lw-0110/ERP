@@ -1,0 +1,16 @@
+.reception-booking { max-width: 48rem; }
+.reception-booking h2 { margin-top: 0; }
+.reception-step { display: flex; align-items: center; gap: .65rem; margin: 1.5rem 0 .8rem; }
+.reception-step span { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: #e9efff; color: #3157bb; font-weight: 700; }
+.reception-step h3 { margin: 0; }
+.reception-search input { width: 100%; }
+.reception-results { list-style: none; padding: 0; margin: .8rem 0; display: grid; gap: .5rem; }
+.reception-results li, .reception-selected { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem; border: 1px solid var(--border); border-radius: .6rem; }
+.reception-results li div, .reception-selected { min-width: 0; }
+.reception-results li div { display: grid; gap: .2rem; overflow-wrap: anywhere; }
+.reception-results small { color: var(--muted); }
+.reception-selected { flex-wrap: wrap; }
+.reception-selected span { color: var(--muted); }
+.reception-create, .reception-book-form { margin-top: 1rem; max-width: 28rem; }
+.reception-book-form select { min-height: 7rem; }
+@media (max-width: 40rem) { .reception-results li { align-items: stretch; flex-direction: column; } .reception-results li button { width: 100%; } }

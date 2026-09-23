@@ -1,0 +1,53 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: platform
+          POSTGRES_PASSWORD: platform
+          POSTGRES_DB: platform_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U platform -d platform_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://platform:platform@localhost:5432/platform_test?schema=public
+      BETTER_AUTH_SECRET: ci-only-secret-with-at-least-32-characters
+      BETTER_AUTH_URL: http://127.0.0.1:3000
+      WEB_URL: http://127.0.0.1:4173
+      DEFAULT_ORGANIZATION_SLUG: development
+      DEVELOPMENT_ORGANIZATION_NAME: Development Organization
+      STAFF_INVITATION_TTL_HOURS: 24
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_AUTH_MAX: 60
+      RATE_LIMIT_MUTATION_MAX: 120
+      RATE_LIMIT_INVITATION_MAX: 30
+      DEMO_SEED_ENABLED: true
+      DEMO_ORGANIZATION_SLUG: demo
+      DEMO_ORGANIZATION_NAME: Demo Organization
+      DEMO_ADMIN_PASSWORD: ci-demo-admin-password
+      DEMO_STAFF_PASSWORD: ci-demo-staff-password
+      DEMO_CUSTOMER_PASSWORD: ci-demo-customer-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @platform/database exec prisma generate
+      - run: pnpm --filter @platform/database exec prisma validate
+      - run: pnpm --filter @platform/database exec prisma migrate deploy
+      - run: pnpm --filter @platform/database exec prisma db seed
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm --filter @platform/api seed:demo
+      - run: pnpm --filter @platform/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @platform/web test:e2e

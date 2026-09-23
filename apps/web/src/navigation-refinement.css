@@ -1,0 +1,54 @@
+/* Navigation-specific responsive shell; keep page and business UI styles elsewhere. */
+.app-layout { --sidebar-width: 256px; }
+.app-layout.sidebar-collapsed { --sidebar-width: 76px; }
+.desktop-sidebar { padding: .75rem .7rem; }
+.sidebar-navigation { gap: .12rem; }
+.sidebar-link { gap: .75rem; padding: .65rem .72rem; font-size: .96rem; }
+.sidebar-link > span:not(.submenu-chevron) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.submenu-chevron { transform: rotate(-90deg); transition: transform 140ms ease; }
+.sidebar-link[aria-expanded="true"] .submenu-chevron { transform: rotate(0); }
+.sidebar-submenu { margin: .15rem 0 .45rem 1.33rem; padding-left: 1rem; border-left: 1px solid #465066; }
+.submenu-link { min-height: 2.5rem; padding: .48rem .7rem; font-size: .89rem; font-weight: 500; }
+.sidebar-submenu .submenu-link.is-active { box-shadow: inset 2px 0 #809cff; }
+.sidebar-collapsed .desktop-sidebar .sidebar-submenu { display: none; }
+.sidebar-flyout { position: fixed; left: 80px; z-index: 100; display: grid; gap: .1rem; width: 15rem; max-height: min(25rem, calc(100dvh - 1.5rem)); overflow-y: auto; padding: .65rem; color: #eaf0fc; background: #222b3c; border: 1px solid #43506a; border-radius: .7rem; box-shadow: 0 14px 32px #121a2b50; }
+.sidebar-flyout strong { padding: .45rem .7rem .55rem; font-size: .84rem; }
+.sidebar-flyout .submenu-link { color: #b9c5d7; }
+.sidebar-flyout .submenu-link:hover, .sidebar-flyout .submenu-link.is-active { color: #fff; background: #354360; }
+.sidebar-collapsed .desktop-sidebar .sidebar-link { justify-content: center; }
+.sidebar-collapsed .desktop-sidebar .sidebar-link span { display: none; }
+.sidebar-collapsed .desktop-sidebar .brand { justify-content: center; padding-inline: 0; }
+.sidebar-collapsed .desktop-sidebar .brand-copy { display: none; }
+@media (min-width: 1024px) {
+  .app-layout:not(.sidebar-collapsed) { --sidebar-width: 256px; }
+  .app-layout.sidebar-collapsed { --sidebar-width: 76px; }
+}
+
+@media (max-width: 1023px) {
+  .app-layout, .app-layout.sidebar-collapsed { display: block; min-height: 100dvh; }
+  .desktop-sidebar, .content-header, .sidebar-flyout { display: none; }
+  .mobile-header { position: sticky; top: 0; z-index: 30; display: grid; grid-template-columns: 2.75rem minmax(0,1fr) 2.75rem 2.75rem; align-items: center; gap: .35rem; min-height: 3.75rem; padding: max(.5rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) .5rem max(.75rem, env(safe-area-inset-left)); background: #fff; border-bottom: 1px solid var(--border); }
+  .mobile-header > div { min-width: 0; display: grid; }
+  .mobile-header strong, .mobile-header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-header strong { font-size: .95rem; }
+  .mobile-header small { font-size: .72rem; }
+  .mobile-header .profile-shortcut { width: 2.75rem; height: 2.75rem; padding: .3rem; justify-content: center; }
+  .mobile-header .profile-shortcut span:last-child { display: none; }
+  .mobile-header .notification-panel { right: -.25rem; }
+  .drawer-backdrop { position: fixed; inset: 0; z-index: 40; display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: #0c162ba6; }
+  .mobile-drawer { position: fixed; inset: 0 auto 0 0; z-index: 50; display: flex; flex-direction: column; width: min(320px, 85vw); height: 100dvh; padding: max(.7rem, env(safe-area-inset-top)) .75rem max(.7rem, env(safe-area-inset-bottom)); background: #181d29; overflow: hidden; transform: translateX(0); visibility: visible; }
+  .mobile-drawer .drawer-header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex: 0 0 auto; }
+  .mobile-drawer .icon-button { color: #eaf0fc; }
+  .mobile-drawer .sidebar-navigation { flex: 1 1 auto; min-height: 0; margin: 1rem 0; overflow-y: auto; overflow-x: hidden; }
+  .mobile-drawer .sidebar-footer { flex: 0 0 auto; }
+  .mobile-drawer .sidebar-link { min-height: 2.9rem; }
+  .mobile-drawer .submenu-link { min-height: 2.8rem; }
+  .sidebar-collapsed .mobile-drawer .brand-copy, .sidebar-collapsed .mobile-drawer .sidebar-link span { display: initial; }
+  .sidebar-collapsed .mobile-drawer .profile-copy { display: grid; }
+  .sidebar-collapsed .mobile-drawer .sidebar-link { justify-content: flex-start; padding: .65rem .72rem; }
+  .sidebar-collapsed .mobile-drawer .sidebar-submenu { display: grid; margin: .15rem 0 .45rem 1.33rem; padding-left: 1rem; border-left: 1px solid #465066; }
+  .sidebar-collapsed .mobile-drawer .submenu-link { font-size: .89rem; text-align: left; padding: .48rem .7rem; white-space: nowrap; }
+  .sidebar-collapsed .mobile-drawer .sidebar-profile { justify-content: flex-start; padding: .45rem; }
+  .app-content { max-width: 100%; padding: 1.15rem max(1rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
+}
+@media (prefers-reduced-motion: reduce) { .submenu-chevron { transition: none; } }

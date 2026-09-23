@@ -1,0 +1,794 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RoleStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum AttendanceStatus {
+  INCOMPLETE
+  PRESENT
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum CommissionRuleStatus {
+  DRAFT
+  ARCHIVED
+}
+
+enum BookingChangeType {
+  CANCELLED
+  RESCHEDULED
+}
+
+enum BookingChangeInitiator {
+  CUSTOMER
+  ADMIN
+}
+
+enum BookingAssignmentStatus {
+  ACTIVE
+  INVALIDATED
+}
+
+enum BookingAssignmentInvalidationReason {
+  REPLACED
+  RESCHEDULE_CONFLICT
+}
+
+enum StaffInvitationStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  REVOKED
+}
+
+model User {
+  id                       String             @id @default(uuid()) @db.Uuid
+  name                     String
+  email                    String             @unique
+  emailVerified            Boolean            @default(false) @map("email_verified")
+  image                    String?
+  status                   UserStatus         @default(ACTIVE)
+  lastLoginAt              DateTime?          @map("last_login_at") @db.Timestamptz(6)
+  createdAt                DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  accounts                 Account[]
+  sessions                 Session[]
+  memberships              Membership[]
+  customerProfiles         CustomerProfile[]
+  staffProfiles            StaffProfile[]
+  reviewedLeaveRequests    LeaveRequest[]     @relation("LeaveReviewer")
+  recordedPayments         PaymentRecord[]    @relation("PaymentRecorder")
+  recordedCommissions      CommissionRecord[] @relation("CommissionRecorder")
+  notifications            Notification[]
+  auditActions             AuditLog[]         @relation("AuditActor")
+  bookingChanges           BookingChange[]    @relation("BookingChangeActor")
+  createdStaffInvitations  StaffInvitation[]  @relation("StaffInvitationCreator")
+  redeemedStaffInvitations StaffInvitation[]  @relation("StaffInvitationRedeemer")
+
+  @@map("users")
+}
+
+model Organization {
+  id                  String                    @id @default(uuid()) @db.Uuid
+  name                String
+  slug                String                    @unique
+  industryType        String                    @default("WELLNESS") @map("industry_type")
+  status              OrganizationStatus        @default(ACTIVE)
+  timezone            String                    @default("Asia/Kuala_Lumpur")
+  defaultCurrency     String                    @default("MYR") @map("default_currency")
+  bookingNumberPrefix String                    @default("BK") @map("booking_number_prefix")
+  createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  memberships         Membership[]
+  roles               Role[]
+  customers           CustomerProfile[]
+  staff               StaffProfile[]
+  skills              Skill[]
+  serviceCategories   ServiceCategory[]
+  services            Service[]
+  resourceTypes       ResourceType[]
+  resources           Resource[]
+  bookings            Booking[]
+  openingHours        OrganizationOpeningHour[]
+  attendanceRecords   AttendanceRecord[]
+  leaveTypes          LeaveType[]
+  leaveRequests       LeaveRequest[]
+  payments            PaymentRecord[]
+  commissionRules     CommissionRule[]
+  commissionRecords   CommissionRecord[]
+  notifications       Notification[]
+  auditLogs           AuditLog[]
+  bookingPolicy       BookingPolicy?
+  bookingChanges      BookingChange[]
+  staffInvitations    StaffInvitation[]
+
+  @@map("organizations")
+}
+
+model Notification {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  eventKey       String?      @map("event_key")
+  type           String
+  title          String
+  message        String
+  metadata       Json?
+  readAt         DateTime?    @map("read_at") @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, eventKey])
+  @@index([organizationId, userId, createdAt])
+  @@index([organizationId, userId, readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  actorUserId    String?       @map("actor_user_id") @db.Uuid
+  action         String
+  entityType     String
+  entityId       String?       @map("entity_id")
+  metadata       Json          @default("{}")
+  ipAddress      String?       @map("ip_address")
+  userAgent      String?       @map("user_agent")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor          User?         @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, actorUserId, createdAt])
+  @@index([organizationId, action, createdAt])
+  @@map("audit_logs")
+}
+
+model CustomerProfile {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String?      @map("user_id") @db.Uuid
+  firstName      String       @map("first_name")
+  lastName       String       @map("last_name")
+  displayName    String       @map("display_name")
+  email          String
+  phone          String
+  dateOfBirth    DateTime?    @map("date_of_birth") @db.Date
+  notes          String?
+  status         EntityStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  bookings       Booking[]
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, status])
+  @@index([organizationId, email])
+  @@map("customer_profiles")
+}
+
+model StaffProfile {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  organizationId     String                 @map("organization_id") @db.Uuid
+  userId             String?                @map("user_id") @db.Uuid
+  employeeCode       String                 @map("employee_code")
+  displayName        String                 @map("display_name")
+  email              String
+  phone              String
+  hireDate           DateTime?              @map("hire_date") @db.Date
+  status             EntityStatus           @default(ACTIVE)
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user               User?                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  skills             StaffSkill[]
+  schedules          StaffWorkingSchedule[]
+  bookingAssignments BookingStaff[]
+  attendanceRecords  AttendanceRecord[]
+  leaveRequests      LeaveRequest[]
+  commissionRecords  CommissionRecord[]
+  invitations        StaffInvitation[]
+
+  @@unique([organizationId, userId])
+  @@unique([organizationId, employeeCode])
+  @@index([organizationId, status])
+  @@index([organizationId, email])
+  @@map("staff_profiles")
+}
+
+model StaffInvitation {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @map("organization_id") @db.Uuid
+  staffProfileId   String                @map("staff_profile_id") @db.Uuid
+  roleId           String?               @map("role_id") @db.Uuid
+  email            String
+  tokenHash        String                @unique @map("token_hash")
+  status           StaffInvitationStatus @default(ACTIVE)
+  expiresAt        DateTime              @map("expires_at") @db.Timestamptz(6)
+  usedAt           DateTime?             @map("used_at") @db.Timestamptz(6)
+  revokedAt        DateTime?             @map("revoked_at") @db.Timestamptz(6)
+  createdByUserId  String                @map("created_by_user_id") @db.Uuid
+  redeemedByUserId String?               @map("redeemed_by_user_id") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  staffProfile     StaffProfile          @relation(fields: [staffProfileId], references: [id], onDelete: Restrict)
+  role             Role?                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  createdBy        User                  @relation("StaffInvitationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  redeemedBy       User?                 @relation("StaffInvitationRedeemer", fields: [redeemedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, staffProfileId, status])
+  @@index([roleId])
+  @@index([expiresAt, status])
+  @@map("staff_invitations")
+}
+
+model Skill {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  organizationId      String                 @map("organization_id") @db.Uuid
+  name                String
+  description         String?
+  status              EntityStatus           @default(ACTIVE)
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  staffSkills         StaffSkill[]
+  serviceRequirements ServiceRequiredSkill[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("skills")
+}
+
+model StaffSkill {
+  staffId String       @map("staff_id") @db.Uuid
+  skillId String       @map("skill_id") @db.Uuid
+  staff   StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  skill   Skill        @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@id([staffId, skillId])
+  @@index([skillId])
+  @@map("staff_skills")
+}
+
+model ServiceCategory {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+  status         EntityStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  services       Service[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("service_categories")
+}
+
+model Service {
+  id                    String                        @id @default(uuid()) @db.Uuid
+  organizationId        String                        @map("organization_id") @db.Uuid
+  categoryId            String?                       @map("category_id") @db.Uuid
+  name                  String
+  description           String?
+  durationMinutes       Int                           @map("duration_minutes")
+  priceMinor            Int                           @map("price_minor")
+  currency              String                        @db.Char(3)
+  requiredStaffCount    Int                           @default(1) @map("required_staff_count")
+  bufferBeforeMinutes   Int                           @default(0) @map("buffer_before_minutes")
+  bufferAfterMinutes    Int                           @default(0) @map("buffer_after_minutes")
+  status                EntityStatus                  @default(ACTIVE)
+  createdAt             DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization          Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  category              ServiceCategory?              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  requiredSkills        ServiceRequiredSkill[]
+  requiredResourceTypes ServiceRequiredResourceType[]
+  commissionRules       CommissionRule[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@index([categoryId])
+  @@map("services")
+}
+
+model ServiceRequiredSkill {
+  serviceId     String  @map("service_id") @db.Uuid
+  skillId       String  @map("skill_id") @db.Uuid
+  requiredCount Int     @default(1) @map("required_count")
+  service       Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  skill         Skill   @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@id([serviceId, skillId])
+  @@index([skillId])
+  @@map("service_required_skills")
+}
+
+model ResourceType {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  organizationId      String                        @map("organization_id") @db.Uuid
+  name                String
+  description         String?
+  status              EntityStatus                  @default(ACTIVE)
+  createdAt           DateTime                      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization        Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  serviceRequirements ServiceRequiredResourceType[]
+  resources           Resource[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("resource_types")
+}
+
+model Resource {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  resourceTypeId String            @map("resource_type_id") @db.Uuid
+  name           String
+  code           String?
+  capacity       Int
+  status         EntityStatus      @default(ACTIVE)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  resourceType   ResourceType      @relation(fields: [resourceTypeId], references: [id], onDelete: Restrict)
+  assignments    BookingResource[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@map("resources")
+}
+
+model OrganizationOpeningHour {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  dayOfWeek      Int          @map("day_of_week")
+  openTime       String       @map("open_time")
+  closeTime      String       @map("close_time")
+  status         EntityStatus @default(ACTIVE)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, dayOfWeek])
+  @@map("organization_opening_hours")
+}
+
+model StaffWorkingSchedule {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  staffId        String       @map("staff_id") @db.Uuid
+  dayOfWeek      Int          @map("day_of_week")
+  startTime      String       @map("start_time")
+  endTime        String       @map("end_time")
+  status         EntityStatus @default(ACTIVE)
+  staff          StaffProfile @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, dayOfWeek])
+  @@index([organizationId, dayOfWeek, status])
+  @@map("staff_working_schedules")
+}
+
+model AttendanceRecord {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  staffId        String           @map("staff_id") @db.Uuid
+  workDate       DateTime         @map("work_date") @db.Date
+  clockInAt      DateTime         @map("clock_in_at") @db.Timestamptz(6)
+  clockOutAt     DateTime?        @map("clock_out_at") @db.Timestamptz(6)
+  status         AttendanceStatus @default(INCOMPLETE)
+  note           String?
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  staff          StaffProfile     @relation(fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, workDate])
+  @@index([staffId, clockInAt])
+  @@map("attendance_records")
+}
+
+model LeaveType {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  name           String
+  description    String?
+  status         EntityStatus   @default(ACTIVE)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  requests       LeaveRequest[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("leave_types")
+}
+
+model LeaveRequest {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @map("organization_id") @db.Uuid
+  staffId          String             @map("staff_id") @db.Uuid
+  leaveTypeId      String             @map("leave_type_id") @db.Uuid
+  startDateTime    DateTime           @map("start_date_time") @db.Timestamptz(6)
+  endDateTime      DateTime           @map("end_date_time") @db.Timestamptz(6)
+  reason           String?
+  status           LeaveRequestStatus @default(PENDING)
+  adminNote        String?            @map("admin_note")
+  reviewedByUserId String?            @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt       DateTime?          @map("reviewed_at") @db.Timestamptz(6)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  staff            StaffProfile       @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  leaveType        LeaveType          @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  reviewer         User?              @relation("LeaveReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status, startDateTime, endDateTime])
+  @@index([staffId, status, startDateTime, endDateTime])
+  @@map("leave_requests")
+}
+
+model Booking {
+  id                String             @id @default(uuid()) @db.Uuid
+  organizationId    String             @map("organization_id") @db.Uuid
+  customerId        String             @map("customer_id") @db.Uuid
+  bookingNumber     String             @map("booking_number")
+  startDateTime     DateTime           @map("start_date_time") @db.Timestamptz(6)
+  endDateTime       DateTime           @map("end_date_time") @db.Timestamptz(6)
+  status            BookingStatus      @default(CONFIRMED)
+  paymentStatus     PaymentStatus      @default(UNPAID) @map("payment_status")
+  customerNote      String?            @map("customer_note")
+  internalNote      String?            @map("internal_note")
+  createdByUserId   String             @map("created_by_user_id") @db.Uuid
+  cancelledAt       DateTime?          @map("cancelled_at") @db.Timestamptz(6)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer          CustomerProfile    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  services          BookingService[]
+  payments          PaymentRecord[]
+  commissionRecords CommissionRecord[]
+  changes           BookingChange[]
+
+  @@unique([organizationId, bookingNumber])
+  @@index([organizationId, startDateTime, endDateTime, status])
+  @@index([organizationId, status, startDateTime])
+  @@index([organizationId, customerId, startDateTime])
+  @@map("bookings")
+}
+
+model BookingPolicy {
+  id                          String       @id @default(uuid()) @db.Uuid
+  organizationId              String       @unique @map("organization_id") @db.Uuid
+  customerCancellationEnabled Boolean      @default(false) @map("customer_cancellation_enabled")
+  customerRescheduleEnabled   Boolean      @default(false) @map("customer_reschedule_enabled")
+  cancellationCutoffMinutes   Int?         @map("cancellation_cutoff_minutes")
+  rescheduleCutoffMinutes     Int?         @map("reschedule_cutoff_minutes")
+  maxCustomerReschedules      Int?         @map("max_customer_reschedules")
+  createdAt                   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization                Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@map("booking_policies")
+}
+
+model BookingChange {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  organizationId        String                 @map("organization_id") @db.Uuid
+  bookingId             String                 @map("booking_id") @db.Uuid
+  type                  BookingChangeType
+  initiatedBy           BookingChangeInitiator @map("initiated_by")
+  actorUserId           String                 @map("actor_user_id") @db.Uuid
+  reason                String?
+  previousStartDateTime DateTime?              @map("previous_start_date_time") @db.Timestamptz(6)
+  previousEndDateTime   DateTime?              @map("previous_end_date_time") @db.Timestamptz(6)
+  newStartDateTime      DateTime?              @map("new_start_date_time") @db.Timestamptz(6)
+  newEndDateTime        DateTime?              @map("new_end_date_time") @db.Timestamptz(6)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  booking               Booking                @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  actor                 User                   @relation("BookingChangeActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, bookingId, createdAt])
+  @@index([bookingId, type, initiatedBy])
+  @@map("booking_changes")
+}
+
+model BookingService {
+  id                                 String             @id @default(uuid()) @db.Uuid
+  bookingId                          String             @map("booking_id") @db.Uuid
+  serviceId                          String             @map("service_id") @db.Uuid
+  unitPriceMinorSnapshot             Int                @map("unit_price_minor_snapshot")
+  currencySnapshot                   String             @map("currency_snapshot") @db.Char(3)
+  durationMinutesSnapshot            Int                @map("duration_minutes_snapshot")
+  bufferBeforeMinutesSnapshot        Int                @map("buffer_before_minutes_snapshot")
+  bufferAfterMinutesSnapshot         Int                @map("buffer_after_minutes_snapshot")
+  requiredStaffCountSnapshot         Int                @map("required_staff_count_snapshot")
+  requiredSkillIdsSnapshot           Json               @map("required_skill_ids_snapshot")
+  requiredSkillCountsSnapshot        Json               @map("required_skill_counts_snapshot")
+  requiredResourceTypeCountsSnapshot Json               @map("required_resource_type_counts_snapshot")
+  quantity                           Int
+  lineTotalMinor                     Int                @map("line_total_minor")
+  sortOrder                          Int                @map("sort_order")
+  booking                            Booking            @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  staffAssignments                   BookingStaff[]
+  resourceAssignments                BookingResource[]
+  commissionRecords                  CommissionRecord[]
+
+  @@unique([bookingId, sortOrder])
+  @@index([serviceId])
+  @@map("booking_services")
+}
+
+model BookingStaff {
+  id                 String                               @id @default(uuid()) @db.Uuid
+  bookingServiceId   String                               @map("booking_service_id") @db.Uuid
+  staffId            String                               @map("staff_id") @db.Uuid
+  assignedByUserId   String?                              @map("assigned_by_user_id") @db.Uuid
+  assignedAt         DateTime                             @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  status             BookingAssignmentStatus              @default(ACTIVE)
+  invalidatedAt      DateTime?                            @map("invalidated_at") @db.Timestamptz(6)
+  invalidationReason BookingAssignmentInvalidationReason? @map("invalidation_reason")
+  bookingService     BookingService                       @relation(fields: [bookingServiceId], references: [id], onDelete: Cascade)
+  staff              StaffProfile                         @relation(fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@index([bookingServiceId, status])
+  @@index([staffId, status])
+  @@map("booking_staff")
+}
+
+model BookingResource {
+  id                 String                               @id @default(uuid()) @db.Uuid
+  bookingServiceId   String                               @map("booking_service_id") @db.Uuid
+  resourceId         String                               @map("resource_id") @db.Uuid
+  assignedByUserId   String?                              @map("assigned_by_user_id") @db.Uuid
+  assignedAt         DateTime                             @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  status             BookingAssignmentStatus              @default(ACTIVE)
+  invalidatedAt      DateTime?                            @map("invalidated_at") @db.Timestamptz(6)
+  invalidationReason BookingAssignmentInvalidationReason? @map("invalidation_reason")
+  bookingService     BookingService                       @relation(fields: [bookingServiceId], references: [id], onDelete: Cascade)
+  resource           Resource                             @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+
+  @@index([bookingServiceId, status])
+  @@index([resourceId, status])
+  @@map("booking_resources")
+}
+
+model PaymentRecord {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  bookingId        String       @map("booking_id") @db.Uuid
+  amountMinor      Int          @map("amount_minor")
+  currency         String       @db.Char(3)
+  paymentMethod    String       @map("payment_method")
+  reference        String?
+  note             String?
+  paidAt           DateTime     @map("paid_at") @db.Timestamptz(6)
+  recordedByUserId String       @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  booking          Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  recordedBy       User         @relation("PaymentRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, bookingId, paidAt])
+  @@index([organizationId, paidAt])
+  @@map("payment_records")
+}
+
+model CommissionRule {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  serviceId      String?              @map("service_id") @db.Uuid
+  version        Int                  @default(1)
+  configuration  Json
+  status         CommissionRuleStatus @default(DRAFT)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  service        Service?             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, serviceId, status])
+  @@map("commission_rules")
+}
+
+model CommissionRecord {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @map("organization_id") @db.Uuid
+  bookingId        String         @map("booking_id") @db.Uuid
+  bookingServiceId String         @map("booking_service_id") @db.Uuid
+  staffId          String         @map("staff_id") @db.Uuid
+  amountMinor      Int            @map("amount_minor")
+  currency         String         @db.Char(3)
+  sourceSnapshot   Json           @map("source_snapshot")
+  recordedByUserId String         @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  booking          Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  bookingService   BookingService @relation(fields: [bookingServiceId], references: [id], onDelete: Restrict)
+  staff            StaffProfile   @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  recordedBy       User           @relation("CommissionRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([bookingServiceId, staffId])
+  @@index([organizationId, bookingId])
+  @@index([organizationId, staffId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("commission_records")
+}
+
+model ServiceRequiredResourceType {
+  serviceId      String       @map("service_id") @db.Uuid
+  resourceTypeId String       @map("resource_type_id") @db.Uuid
+  requiredCount  Int          @default(1) @map("required_count")
+  service        Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  resourceType   ResourceType @relation(fields: [resourceTypeId], references: [id], onDelete: Restrict)
+
+  @@id([serviceId, resourceTypeId])
+  @@index([resourceTypeId])
+  @@map("service_required_resource_types")
+}
+
+model Membership {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  roleId         String?          @map("role_id") @db.Uuid
+  status         MembershipStatus @default(ACTIVE)
+  joinedAt       DateTime         @default(now()) @map("joined_at") @db.Timestamptz(6)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  role           Role?            @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, status])
+  @@index([roleId])
+  @@map("memberships")
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @map("organization_id") @db.Uuid
+  name            String
+  description     String?
+  isSystemDefault Boolean          @default(false) @map("is_system_default")
+  status          RoleStatus       @default(ACTIVE)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  memberships     Membership[]
+  staffInvitations StaffInvitation[]
+  permissions     RolePermission[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  key             String           @unique
+  module          String
+  description     String
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  password              String?
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at") @db.Timestamptz(6)
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at") @db.Timestamptz(6)
+  scope                 String?
+  idToken               String?   @map("id_token")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([identifier])
+  @@map("verifications")
+}

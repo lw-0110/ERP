@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+.env.production
+.docker-config/
+packages/database/generated/
+.pnpm-store/
