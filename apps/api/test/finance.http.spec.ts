@@ -14,6 +14,7 @@ let app: INestApplication | undefined;
 let base = '';
 let organizationId = '';
 let roleId = '';
+let staffRoleId = '';
 let serviceId = '';
 let bookingId = '';
 let lineId = '';
@@ -58,16 +59,18 @@ beforeAll(async () => {
   const staffUser = await signup(1);
   const role = await prisma.role.create({ data: { organizationId, name: tag } });
   roleId = role.id;
+  staffRoleId = (await prisma.role.create({ data: { organizationId, name: `${tag}-staff` } })).id;
   const ownPermissions = await prisma.permission.findMany({
     where: { key: { in: ['payment.read.own', 'booking.read.own', 'commission.read.own'] } },
   });
   await prisma.rolePermission.createMany({
-    data: ownPermissions.map((permission) => ({ roleId, permissionId: permission.id })),
+    data: [roleId, staffRoleId].flatMap((assignedRoleId) => ownPermissions.map((permission) => ({ roleId: assignedRoleId, permissionId: permission.id }))),
   });
   await prisma.membership.updateMany({
     where: { organizationId, userId: { in: userIds } },
     data: { roleId },
   });
+  await prisma.membership.updateMany({ where: { organizationId, userId: staffUser.id }, data: { roleId: staffRoleId } });
   const customer = await prisma.customerProfile.create({
     data: {
       organizationId,
@@ -144,7 +147,7 @@ afterAll(async () => {
     await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.account.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-    await prisma.role.deleteMany({ where: { id: roleId } });
+    await prisma.role.deleteMany({ where: { id: { in: [roleId, staffRoleId] } } });
   }
   await app?.close();
   await prisma.$disconnect();
@@ -175,14 +178,15 @@ describe('Milestone 7 real HTTP permissions and finance routes', () => {
     expect((await call('/commissions/my')).status).toBe(403);
   });
 
-  it('records payment without changing status and enforces manual commission timing', async () => {
+  it('records payment independently and generates commission on authorized completion', async () => {
     const keys = [
       'payment.read.all',
       'payment.record',
       'payment.status.manage',
       'commission.rule.manage',
       'commission.read.all',
-      'commission.record',
+      'booking.status.update',
+      'service.update',
     ];
     const permissions = await prisma.permission.findMany({ where: { key: { in: keys } } });
     await prisma.rolePermission.createMany({
@@ -211,20 +215,22 @@ describe('Milestone 7 real HTTP permissions and finance routes', () => {
     });
     expect(rule.status).toBe(201);
     expect(rule.result.status).toBe('DRAFT');
-    const commissionBody = {
-      bookingId,
-      bookingServiceId: lineId,
-      staffId,
-      amountMinor: 100,
-      currency: 'MYR',
-      explanation: 'Manual earned commission',
-    };
-    expect((await call('/commissions', 'POST', commissionBody)).status).toBe(400);
-    await prisma.booking.update({ where: { id: bookingId }, data: { status: 'COMPLETED' } });
-    const earned = await call('/commissions', 'POST', commissionBody);
-    expect(earned.status).toBe(201);
-    expect(earned.result.sourceSnapshot.kind).toBe('MANUAL');
-    expect((await call('/commissions', 'POST', commissionBody)).status).toBe(409);
+    const serviceInput = { name: tag, durationMinutes: 30, priceMinor: 1000, currency: 'MYR', requiredStaffCount: 1, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, commissionPercentage: 30 };
+    expect((await call(`/services/${serviceId}`, 'PATCH', serviceInput)).status).toBe(403);
+    const ratePermission = await prisma.permission.findUniqueOrThrow({ where: { key: 'service.commission.manage' } });
+    await prisma.rolePermission.create({ data: { roleId, permissionId: ratePermission.id } });
+    for (const commissionPercentage of [-1, 100.01, 1.234, null, '30']) {
+      expect((await call(`/services/${serviceId}`, 'PATCH', { ...serviceInput, commissionPercentage })).status).toBe(400);
+    }
+    expect((await call(`/services/${serviceId}`, 'PATCH', serviceInput)).status).toBe(200);
+    expect((await call('/commissions', 'POST', { bookingId, bookingServiceId: lineId, staffId, amountMinor: 100, currency: 'MYR', explanation: 'Manual' })).status).toBe(404);
+    for (const status of ['CHECKED_IN', 'IN_PROGRESS', 'COMPLETED']) {
+      expect((await call(`/bookings/${bookingId}/status`, 'PATCH', { status })).status).toBe(200);
+    }
+    expect((await call(`/bookings/${bookingId}/status`, 'PATCH', { status: 'COMPLETED' })).status).toBe(400);
+    const earned = (await call('/commissions/my', 'GET', undefined, 1)).result;
+    expect(earned[0]).toMatchObject({ amountMinor: 300, staffId, sourceSnapshot: { kind: 'AUTOMATIC' } });
+    expect((await call('/commissions', 'GET', undefined, 1)).status).toBe(403);
     expect((await call('/commissions/my', 'GET', undefined, 1)).result).toHaveLength(1);
     expect((await call('/commissions')).result).toHaveLength(1);
   });

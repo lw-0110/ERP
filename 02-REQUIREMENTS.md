@@ -395,24 +395,12 @@ Initial demo/seed records may use sample prices.
 
 ## 22. Commission
 
-Known requirements:
-
-- Commission depends on Service.
-- Service has a Price.
-- Sample values may be used initially.
-
-Not yet fixed:
-
-- Fixed amount?
-- Percentage?
-- Staff-specific override?
-- Combination?
-
-Therefore:
-
-> Do not hard-code a permanent commission formula.
-
-Commission configuration must remain extendable and marked TBD until the business rule is confirmed.
+- Each Service has a configurable commission percentage from 0 to 100, with at most two decimal places.
+- Each BookingService has at most one active assigned Staff. A booking may contain multiple services with different staff.
+- On booking completion, the assigned Staff earns the full booked service-line price × the Service percentage at completion. Quantity is included; amounts round half up to minor units.
+- Unassigned services and zero calculated amounts do not create earnings.
+- Completed earnings retain their price, percentage, assignment and amount snapshots after later Service edits.
+- Staff can read their own commission; broader visibility follows existing permissions. Manual entry is retired.
 
 ## 23. Attendance
 

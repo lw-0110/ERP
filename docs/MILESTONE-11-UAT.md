@@ -23,7 +23,10 @@ Use only synthetic UAT data. Record `Pass`, `Fail`, or `Blocked` and evidence in
 | ATT-01 | Staff | Linked profile | Clock in, repeat, clock out | Duplicate open clock-in rejected; duration recorded | | |
 | LEAVE-01 | Staff/Admin | Leave type exists | Submit and review leave | Pending blocks new capacity; decision and notification appear | | |
 | PAY-01 | Admin/Customer | Booking exists | Record payment, manually change status, view summary | Append-only history and per-currency summary are correct | | |
-| COMM-01 | Admin/Staff | Completed assigned booking | Record commission and view as staff | Manual immutable record succeeds only when eligible | | |
+| COMM-01 | Admin/Staff | Service RM100 with 30% commission; one staff assigned | Complete booking and view My Commission | Assigned staff sees RM30.00 automatically; another staff cannot read it | | |
+| COMM-02 | Admin | Multiple service lines assigned to different staff | Complete, retry completion, then change Service price/rate | One earned record per assigned line; retry creates no duplicates; history stays unchanged | | |
+| COMM-03 | Admin | BookingService exists | Submit two staff IDs directly to assignment API | Rejected; current assignment is preserved | | |
+| COMM-04 | Admin | Services with 0% and fractional percentages | Complete assigned work | Zero produces no record; fractional calculations round half up to minor units | | |
 | REPORT-01 | Admin | Mixed demo history | Filter dashboard/reports | Tenant/date filters and totals are correct | | |
 | EXPORT-01 | Admin | User text begins `=`, `+`, `-`, or `@` | Export CSV | Exported cells are formula-neutralized; stored value unchanged | | |
 | NOTIF-01 | Each | A recipient event occurs | Open notifications/read one/read all | Only intended tenant/user receives it; unread count changes | | |

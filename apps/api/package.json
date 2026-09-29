@@ -10,7 +10,7 @@
     "test": "vitest run --passWithNoTests",
     "build": "nest build",
     "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
-    "seed:demo": "node scripts/demo-seed.mjs",
+    "seed:demo": "nest build && node scripts/demo-seed.mjs",
     "reset:demo": "node scripts/reset-demo.mjs"
   },
   "dependencies": {

@@ -103,6 +103,7 @@ export class AssignmentService {
     staffIds: string[],
     actorUserId: string,
   ) {
+    if (staffIds.length > 1) throw badRequest('STAFF_ASSIGNMENT_LIMIT');
     return prisma.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(${organizationId}))) AS held`;

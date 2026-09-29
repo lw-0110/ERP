@@ -292,6 +292,11 @@ describe('Milestone 5 persisted booking behavior', () => {
     ).rejects.toThrow();
     const result = await assignments.replaceStaff(organizationId, line.id, [staffIds[0]], userId);
     expect(result.warnings.length).toBe(1);
+    await prisma.bookingService.update({ where: { id: line.id }, data: { requiredStaffCountSnapshot: 2 } });
+    await expect(assignments.replaceStaff(organizationId, line.id, staffIds.slice(0, 2), userId)).rejects.toThrow('Only one staff member');
+    expect(await prisma.bookingStaff.count({ where: { bookingServiceId: line.id, status: 'ACTIVE' } })).toBe(1);
+    await expect(prisma.bookingStaff.create({ data: { bookingServiceId: line.id, staffId: staffIds[1], assignedByUserId: userId } })).rejects.toThrow();
+    await prisma.bookingService.update({ where: { id: line.id }, data: { requiredStaffCountSnapshot: 1 } });
     await expect(
       assignments.replaceStaff(organizationId, line.id, [randomUUID()], userId),
     ).rejects.toThrow();

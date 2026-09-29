@@ -328,22 +328,11 @@ Do not add Stripe, PayPal, FPX, or another gateway unless explicitly requested.
 
 ## 17. Commission Rule
 
-Known:
-
-- Commission depends on Service.
-- Service has Price.
-- Sample values may be used.
-
-Unknown:
-
-- Final production formula.
-
-Therefore:
-
-- Do not hard-code percentage-only logic.
-- Do not hard-code fixed-only logic.
-- Keep commission configuration extensible.
-- Mark exact formula as TBD until confirmed.
+- Service commission is a configurable percentage (0–100, up to two decimal places).
+- Each BookingService may have only one active Staff assignment.
+- Booking completion automatically creates the assigned staff's full commission from the booked line price and current Service percentage, rounded half up to minor units.
+- Retain historical amount, price, rate and assignment snapshots. Do not recalculate completed earnings when Service settings change.
+- Reuse CommissionRecord; do not introduce a parallel system or rules engine.
 
 ## 18. Database Rules
 
@@ -647,7 +636,6 @@ If a missing decision changes business behavior, mark it unresolved and wait for
 
 Examples:
 
-- Final commission formula
 - Refund calculation
 - Payroll
 - Cancellation penalty
@@ -656,13 +644,9 @@ Examples:
 
 Purely technical decisions that do not alter business behavior may use a standard maintainable solution.
 
-## 39. Current Explicit TBD
+## 39. Commission Follow-up Scope
 
-### Commission Formula
-
-Do not finalize a permanent formula until explicitly defined.
-
-Current implementation should support service-level commission configuration and sample values only.
+The service-percentage formula is confirmed. Commission adjustments, reversals and advanced rules require separate requirements.
 
 ## 40. Primary Principle
 

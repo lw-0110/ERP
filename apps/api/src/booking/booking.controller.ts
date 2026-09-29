@@ -179,7 +179,8 @@ export class BookingController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(bodyPipe(BookingStatusDto)) dto: BookingStatusDto,
   ) {
-    return this.bookings.setStatus(tenantContext(req).organizationId, id, dto.status);
+    const context = tenantContext(req);
+    return this.bookings.setStatus(context.organizationId, id, dto.status, context.userId);
   }
   @Patch('admin/bookings/:id/cancel') @RequirePermission('booking.cancel.all') cancelAdmin(
     @Req() req: TenantRequest,

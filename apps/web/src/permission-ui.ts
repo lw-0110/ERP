@@ -69,7 +69,6 @@ const metadata: Record<string, readonly [string, string]> = {
   'commission.rule.manage': ['Manage commission rules', 'Set rules for calculating commission.'],
   'commission.read.own': ['View own commission', 'See your own commission records.'],
   'commission.read.all': ['View all commission records', 'See staff commission records.'],
-  'commission.record': ['Record commission', 'Add a commission record.'],
   'report.view': ['View reports', 'Open organization reports.'],
   'report.read.operations': ['View operational reports', 'See booking and operations reports.'],
   'report.read.finance': ['View financial reports', 'See sales and finance reports.'],

@@ -5,10 +5,8 @@ process.env.DATABASE_URL = 'postgresql://platform:platform@localhost:5432/platfo
 const { prisma } = await import('../auth/prisma.js');
 const { ReportService } = await import('./report.service.js');
 const { StaffIdentityService } = await import('../staff-operations/staff-identity.service.js');
-const { CommissionService } = await import('../finance/commission.service.js');
 const { csv } = await import('./csv.js');
 const reports = new ReportService(new StaffIdentityService());
-const commissions = new CommissionService(new StaffIdentityService());
 const tag = `m8-${randomUUID()}`;
 const filter = { from: '2030-01-07', to: '2030-01-07' };
 let organizationId = '';
@@ -156,14 +154,16 @@ beforeAll(async () => {
       },
     ],
   });
-  const earned = await commissions.record(organizationId, userId, {
+  // A legacy manual record remains readable after automatic calculation is introduced.
+  const earned = await prisma.commissionRecord.create({ data: {
+    organizationId, recordedByUserId: userId,
     bookingId,
     bookingServiceId: first.services[0].id,
     staffId,
     amountMinor: 3000,
     currency: 'MYR',
-    explanation: 'Manual historical earning',
-  });
+    sourceSnapshot: { kind: 'MANUAL', explanation: 'Manual historical earning' },
+  } });
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kuala_Lumpur',
     year: 'numeric',

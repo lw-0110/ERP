@@ -1,7 +1,7 @@
 # Post-V1 deferred backlog
 
 - Payment gateway, automatic refunds, card data, and settlement automation
-- Automatic commission formulas and commission adjustments/reversals
+- Commission adjustments/reversals and advanced rules beyond the Service percentage
 - Email, SMS, WhatsApp, and push notification delivery
 - File uploads and document storage
 - Distributed rate limiting, metrics, tracing, and centralized log transport

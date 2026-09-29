@@ -249,30 +249,11 @@ skill_id
 required_count
 ```
 
-### ServiceCommissionConfig
+### Service commission percentage
 
-The exact commission formula is not finalized.
+`Service.commissionPercentage` is a decimal percentage (0–100, two decimal places). Automatic earnings reuse `CommissionRecord` and its source snapshot; Draft JSON Commission Rules do not calculate earnings.
 
-Suggested flexible structure:
-
-```text
-id
-organization_id
-service_id
-mode
-value
-status
-```
-
-Possible future modes:
-
-```text
-FIXED
-PERCENTAGE
-CUSTOM
-```
-
-Do not permanently enforce one mode until explicitly confirmed.
+Each BookingService has at most one ACTIVE BookingStaff row, enforced by a partial unique index. Invalidated assignment history remains available. Each assigned staff receives the full commission when the booking completes.
 
 ## 9. Resources / Rooms
 
@@ -829,21 +810,6 @@ Examples:
 
 Changing current master data must not rewrite historical booking facts.
 
-## 25. Explicitly Unfinalized Rule
+## 25. Confirmed Commission Formula
 
-### Commission Formula
-
-Known:
-
-- Depends on Service
-- Service has Price
-- Sample values are acceptable initially
-
-Not fixed:
-
-- Fixed amount
-- Percentage
-- Staff-specific override
-- Combination
-
-The implementation must remain configurable and must not lock into one permanent formula yet.
+Booked service-line price (saved unit price × quantity) × Service commission percentage at completion, rounded half up to minor units. Store the calculated amount and source snapshot when completing the booking; future Service changes do not recalculate completed earnings. No commission splitting or rules engine is required.

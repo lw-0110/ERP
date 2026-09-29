@@ -6,12 +6,15 @@ import {
   IsEmail,
   IsIn,
   IsInt,
+  IsNumber,
   IsISO4217CurrencyCode,
   IsOptional,
   IsString,
   IsUUID,
   Length,
   Min,
+  Max,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -53,6 +56,7 @@ export class ServiceDto {
   @IsOptional() @IsString() description?: string;
   @IsInt() @Min(1) durationMinutes!: number;
   @IsInt() @Min(0) priceMinor!: number;
+  @ValidateIf((_object, value) => value !== undefined) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100) commissionPercentage?: number;
   @IsISO4217CurrencyCode() currency!: string;
   @IsInt() @Min(1) requiredStaffCount!: number;
   @IsInt() @Min(0) bufferBeforeMinutes!: number;

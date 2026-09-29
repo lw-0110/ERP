@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../auth/prisma.js';
 import { sequentialDurationMinutes } from './booking-snapshots.js';
 import { AvailabilityService } from './availability.service.js';
+import { createCompletedBookingCommissions } from '../finance/commission.service.js';
 
 export type CreateBookingLine = { serviceId: string; quantity: number };
 @Injectable()
@@ -258,15 +259,25 @@ export class BookingService {
     organizationId: string,
     id: string,
     status: 'CHECKED_IN' | 'IN_PROGRESS' | 'COMPLETED' | 'NO_SHOW',
+    actorUserId?: string,
   ) {
-    const booking = await this.get(organizationId, id);
-    const transitions: Record<string, string[]> = {
-      CONFIRMED: ['CHECKED_IN', 'NO_SHOW'],
-      CHECKED_IN: ['IN_PROGRESS'],
-      IN_PROGRESS: ['COMPLETED'],
-    };
-    if (!transitions[booking.status]?.includes(status))
-      throw new BadRequestException('This booking status transition is not allowed.');
-    return prisma.booking.update({ where: { id }, data: { status } });
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(${organizationId}))) AS held`;
+      const booking = await tx.booking.findFirst({ where: { id, organizationId } });
+      if (!booking) throw new NotFoundException('Booking not found.');
+      const transitions: Record<string, string[]> = {
+        CONFIRMED: ['CHECKED_IN', 'NO_SHOW'],
+        CHECKED_IN: ['IN_PROGRESS'],
+        IN_PROGRESS: ['COMPLETED'],
+      };
+      if (!transitions[booking.status]?.includes(status))
+        throw new BadRequestException('This booking status transition is not allowed.');
+      const updated = await tx.booking.update({ where: { id }, data: { status } });
+      if (status === 'COMPLETED') {
+        if (!actorUserId) throw new BadRequestException('A completion actor is required.');
+        await createCompletedBookingCommissions(tx, organizationId, id, actorUserId);
+      }
+      return updated;
+    }, { timeout: 15_000 });
   }
 }

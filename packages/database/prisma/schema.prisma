@@ -329,6 +329,7 @@ model Service {
   description           String?
   durationMinutes       Int                           @map("duration_minutes")
   priceMinor            Int                           @map("price_minor")
+  commissionPercentage Decimal                       @default(0) @map("commission_percentage") @db.Decimal(5, 2)
   currency              String                        @db.Char(3)
   requiredStaffCount    Int                           @default(1) @map("required_staff_count")
   bufferBeforeMinutes   Int                           @default(0) @map("buffer_before_minutes")

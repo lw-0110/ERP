@@ -20,6 +20,7 @@ export const errorMessages = {
   STAFF_NOT_AVAILABLE: 'This staff member is not available at the selected time.',
   STAFF_ON_LEAVE: 'This staff member is on leave during the selected time.',
   STAFF_ASSIGNMENT_CONFLICT: 'This staff member already has another assignment during this time.',
+  STAFF_ASSIGNMENT_LIMIT: 'Only one staff member can be assigned to a booking service.',
   STAFF_CROSS_TENANT: 'The selected staff member is not available for this organization.',
   RESOURCE_INACTIVE: 'This resource is inactive.',
   RESOURCE_UNAVAILABLE: 'This resource is not available at the selected time.',

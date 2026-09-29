@@ -7,3 +7,4 @@ coverage/
 .docker-config/
 packages/database/generated/
 .pnpm-store/
+playwright-report/

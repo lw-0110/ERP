@@ -2,8 +2,39 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { Prisma } from '@prisma/client';
 import { prisma } from '../auth/prisma.js';
 import { StaffIdentityService } from '../staff-operations/staff-identity.service.js';
-import { validCurrency } from './payment.service.js';
-import { badRequest, conflict, notFound } from '../security/application-error.js';
+import { badRequest, notFound } from '../security/application-error.js';
+
+// Called only inside the transaction that completes the booking. It never updates earnings.
+export async function createCompletedBookingCommissions(tx: Prisma.TransactionClient, organizationId: string, bookingId: string, actorUserId: string) {
+  const booking = await tx.booking.findFirst({
+    where: { id: bookingId, organizationId },
+    include: { services: { include: { staffAssignments: { where: { status: 'ACTIVE' }, include: { staff: { select: { organizationId: true } } } } } } },
+  });
+  if (!booking) throw notFound('BOOKING_NOT_FOUND');
+  if (booking.status !== 'COMPLETED') throw badRequest('COMMISSION_BOOKING_NOT_COMPLETED');
+  const services = await tx.service.findMany({ where: { organizationId, id: { in: booking.services.map((line) => line.serviceId) } } });
+  for (const line of booking.services) {
+    if (line.staffAssignments.length > 1) throw badRequest('STAFF_ASSIGNMENT_LIMIT');
+    const assignment = line.staffAssignments[0];
+    if (!assignment) continue;
+    if (assignment.staff.organizationId !== organizationId) throw badRequest('STAFF_CROSS_TENANT');
+    const service = services.find((item) => item.id === line.serviceId);
+    if (!service) throw notFound('BUSINESS_NOT_FOUND');
+    const amountMinor = new Prisma.Decimal(line.lineTotalMinor).mul(service.commissionPercentage).div(100).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber();
+    if (amountMinor === 0) continue;
+    if (!Number.isSafeInteger(amountMinor) || amountMinor < 0 || amountMinor > 2147483647) throw badRequest('COMMISSION_INVALID_AMOUNT');
+    const percentage = service.commissionPercentage.toFixed(2);
+    const sourceSnapshot = {
+      kind: 'AUTOMATIC', explanation: `Automatic service commission (${percentage}%).`,
+      commissionPercentage: percentage, serviceName: service.name,
+      bookingNumber: booking.bookingNumber, bookingServiceId: line.id, serviceId: line.serviceId,
+      staffId: assignment.staffId, assignmentId: assignment.id, assignedAt: assignment.assignedAt.toISOString(),
+      unitPriceMinorSnapshot: line.unitPriceMinorSnapshot, currencySnapshot: line.currencySnapshot,
+      quantity: line.quantity, lineTotalMinor: line.lineTotalMinor,
+    };
+    await tx.commissionRecord.createMany({ data: [{ organizationId, bookingId, bookingServiceId: line.id, staffId: assignment.staffId, amountMinor, currency: line.currencySnapshot, sourceSnapshot, recordedByUserId: actorUserId }], skipDuplicates: true });
+  }
+}
 
 function draftConfiguration(value: unknown): Prisma.InputJsonValue {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new BadRequestException('Commission draft configuration must be a JSON object.');
@@ -40,31 +71,6 @@ export class CommissionService {
     const changed = await prisma.commissionRule.updateMany({ where: { id, organizationId }, data: { status: 'ARCHIVED' } });
     if (!changed.count) throw new NotFoundException('Commission draft not found.');
     return prisma.commissionRule.findUniqueOrThrow({ where: { id } });
-  }
-
-  async record(organizationId: string, actorUserId: string, input: { bookingId: string; bookingServiceId: string; staffId: string; amountMinor: number; currency: string; explanation: string }) {
-    if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor < 1) throw badRequest('COMMISSION_INVALID_AMOUNT');
-    if (!validCurrency(input.currency)) throw badRequest('PAYMENT_INVALID_CURRENCY');
-    if (!input.explanation.trim()) throw badRequest('VALIDATION_INVALID_REQUEST');
-    return prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(${organizationId}))) AS held`;
-      await tx.$queryRaw`SELECT id FROM bookings WHERE id = ${input.bookingId}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`;
-      const booking = await tx.booking.findFirst({ where: { id: input.bookingId, organizationId }, select: { id: true, bookingNumber: true, status: true } });
-      if (!booking) throw notFound('BOOKING_NOT_FOUND');
-      if (booking.status !== 'COMPLETED') throw badRequest('COMMISSION_BOOKING_NOT_COMPLETED');
-      const line = await tx.bookingService.findFirst({ where: { id: input.bookingServiceId, bookingId: booking.id }, include: { staffAssignments: { where: { staffId: input.staffId, status: 'ACTIVE' } } } });
-      if (!line || !line.staffAssignments.length) throw badRequest('COMMISSION_STAFF_NOT_ASSIGNED');
-      const staff = await tx.staffProfile.findFirst({ where: { id: input.staffId, organizationId } });
-      if (!staff) throw new BadRequestException('Staff is not in this organization.');
-      const assignment = line.staffAssignments[0];
-      const sourceSnapshot = { kind: 'MANUAL', explanation: input.explanation.trim(), bookingNumber: booking.bookingNumber, bookingServiceId: line.id, serviceId: line.serviceId, staffId: staff.id, assignmentId: assignment.id, assignedAt: assignment.assignedAt.toISOString(), unitPriceMinorSnapshot: line.unitPriceMinorSnapshot, currencySnapshot: line.currencySnapshot, quantity: line.quantity, lineTotalMinor: line.lineTotalMinor };
-      try {
-        return await tx.commissionRecord.create({ data: { organizationId, bookingId: booking.id, bookingServiceId: line.id, staffId: staff.id, amountMinor: input.amountMinor, currency: input.currency, sourceSnapshot, recordedByUserId: actorUserId } });
-      } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw conflict('BUSINESS_DUPLICATE');
-        throw error;
-      }
-    }, { timeout: 15_000 });
   }
 
   async list(organizationId: string) {

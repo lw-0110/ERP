@@ -6,6 +6,11 @@ const { prisma } = await import('../auth/prisma.js');
 const { PaymentService } = await import('./payment.service.js');
 const { CommissionService } = await import('./commission.service.js');
 const { StaffIdentityService } = await import('../staff-operations/staff-identity.service.js');
+const { BookingService } = await import('../booking/booking.service.js');
+const { AvailabilityService } = await import('../booking/availability.service.js');
+const { ServiceService } = await import('../business/service.service.js');
+const bookings = new BookingService(new AvailabilityService());
+const services = new ServiceService();
 const payments = new PaymentService();
 const commissions = new CommissionService(new StaffIdentityService());
 const tag = `m7-${randomUUID()}`;
@@ -75,25 +80,57 @@ describe('Milestone 7 PostgreSQL-backed finance foundation', () => {
     await expect(commissions.updateRule(otherOrganizationId, rule.id, {})).rejects.toThrow();
   });
 
-  it('permits one manual earned record only for completed assigned work and freezes source history', async () => {
-    const input = { bookingId, bookingServiceId: lineId, staffId, amountMinor: 250, currency: 'MYR', explanation: 'Manually approved earned amount' };
-    for (const status of ['CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS', 'CANCELLED', 'NO_SHOW'] as const) {
-      await prisma.booking.update({ where: { id: bookingId }, data: { status } });
-      await expect(commissions.record(organizationId, adminId, input)).rejects.toThrow();
-    }
-    await prisma.booking.update({ where: { id: bookingId }, data: { status: 'COMPLETED' } });
-    await expect(commissions.record(organizationId, adminId, { ...input, staffId: randomUUID() })).rejects.toThrow();
-    await expect(commissions.record(otherOrganizationId, adminId, input)).rejects.toThrow();
-    const earned = await commissions.record(organizationId, adminId, input);
-    expect(earned.amountMinor).toBe(250);
-    await expect(commissions.record(organizationId, adminId, input)).rejects.toThrow();
-    await prisma.service.update({ where: { id: serviceId }, data: { priceMinor: 9999 } });
+  it('creates commission atomically on completion, ignores unassigned lines, and freezes source history', async () => {
+    const input = { name: tag, durationMinutes: 30, priceMinor: 9999, currency: 'MYR', requiredStaffCount: 1, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, commissionPercentage: 30 };
+    await services.update(organizationId, serviceId, input);
+    await bookings.setStatus(organizationId, bookingId, 'CHECKED_IN', adminId);
+    await bookings.setStatus(organizationId, bookingId, 'IN_PROGRESS', adminId);
+    expect(await commissions.list(organizationId)).toHaveLength(0);
+    await expect(bookings.setStatus(otherOrganizationId, bookingId, 'COMPLETED', adminId)).rejects.toThrow();
+    const attempts = await Promise.allSettled([
+      bookings.setStatus(organizationId, bookingId, 'COMPLETED', adminId),
+      bookings.setStatus(organizationId, bookingId, 'COMPLETED', adminId),
+    ]);
+    expect(attempts.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const records = await commissions.list(organizationId);
+    expect(records).toHaveLength(1);
+    const earned = records[0];
+    expect(earned.amountMinor).toBe(300);
+    expect(earned.staffId).toBe(staffId);
+    expect(earned.sourceSnapshot).toMatchObject({ kind: 'AUTOMATIC', commissionPercentage: '30.00', unitPriceMinorSnapshot: 1000 });
+    await services.update(organizationId, serviceId, { ...input, priceMinor: 25000, commissionPercentage: 50 });
     await commissions.updateRule(organizationId, ruleId, { memo: 'Later draft revision' });
     const unchanged = await prisma.commissionRecord.findUniqueOrThrow({ where: { id: earned.id } });
     expect(unchanged.sourceSnapshot).toEqual(earned.sourceSnapshot);
-    expect(unchanged.amountMinor).toBe(250);
+    expect(unchanged.amountMinor).toBe(300);
     expect((await commissions.mine(organizationId, staffUserId)).map((item) => item.id)).toContain(earned.id);
     await expect(commissions.mine(otherOrganizationId, staffUserId)).rejects.toThrow();
     expect((await commissions.list(organizationId)).map((item) => item.id)).toContain(earned.id);
+  });
+
+  it('uses each service rate, quantity, rounding, and its sole assigned staff', async () => {
+    const original = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { services: { orderBy: { sortOrder: 'asc' } } } });
+    const secondStaff = await prisma.staffProfile.create({ data: { organizationId, employeeCode: `${tag}-second`, displayName: 'Second staff', email: `${tag}-second@example.invalid`, phone: '2' } });
+    const rateService = await services.create(organizationId, { name: `${tag}-rounding`, durationMinutes: 30, priceMinor: 100, currency: 'MYR', requiredStaffCount: 1, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, commissionPercentage: 12.5 });
+    const zeroService = await services.create(organizationId, { name: `${tag}-zero`, durationMinutes: 30, priceMinor: 10000, currency: 'MYR', requiredStaffCount: 1, bufferBeforeMinutes: 0, bufferAfterMinutes: 0, commissionPercentage: 0 });
+    const line = { ...original.services[0], id: undefined, bookingId: undefined, requiredSkillIdsSnapshot: [], requiredSkillCountsSnapshot: [], requiredResourceTypeCountsSnapshot: [] };
+    const next = await prisma.booking.create({ data: { organizationId, customerId: original.customerId, bookingNumber: `${tag}-next`, startDateTime: original.startDateTime, endDateTime: original.endDateTime, createdByUserId: adminId, status: 'IN_PROGRESS', services: { create: [
+      { ...line, sortOrder: 0, staffAssignments: { create: { staffId } } },
+      { ...line, serviceId: rateService.id, unitPriceMinorSnapshot: 100, quantity: 3, lineTotalMinor: 300, sortOrder: 1, staffAssignments: { create: { staffId: secondStaff.id } } },
+      { ...line, serviceId: zeroService.id, sortOrder: 2, staffAssignments: { create: { staffId } } },
+    ] } } });
+    await bookings.setStatus(organizationId, next.id, 'COMPLETED', adminId);
+    const records = await prisma.commissionRecord.findMany({ where: { bookingId: next.id }, orderBy: { amountMinor: 'desc' } });
+    expect(records.map(({ staffId, amountMinor }) => ({ staffId, amountMinor }))).toEqual([{ staffId, amountMinor: 500 }, { staffId: secondStaff.id, amountMinor: 38 }]);
+    expect((await commissions.mine(organizationId, staffUserId)).every((record) => record.staffId === staffId)).toBe(true);
+  });
+
+  it('rolls back completion and all earnings when an assigned line cannot be calculated', async () => {
+    const original = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { services: { orderBy: { sortOrder: 'asc' } } } });
+    const line = { ...original.services[0], id: undefined, bookingId: undefined, requiredSkillIdsSnapshot: [], requiredSkillCountsSnapshot: [], requiredResourceTypeCountsSnapshot: [], staffAssignments: { create: { staffId } } };
+    const next = await prisma.booking.create({ data: { organizationId, customerId: original.customerId, bookingNumber: `${tag}-rollback`, startDateTime: original.startDateTime, endDateTime: original.endDateTime, createdByUserId: adminId, status: 'IN_PROGRESS', services: { create: [{ ...line, sortOrder: 0 }, { ...line, serviceId: randomUUID(), sortOrder: 1 }] } } });
+    await expect(bookings.setStatus(organizationId, next.id, 'COMPLETED', adminId)).rejects.toThrow();
+    expect((await prisma.booking.findUniqueOrThrow({ where: { id: next.id } })).status).toBe('IN_PROGRESS');
+    expect(await prisma.commissionRecord.count({ where: { bookingId: next.id } })).toBe(0);
   });
 });

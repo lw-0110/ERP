@@ -314,7 +314,7 @@ describe('Milestone 10 booking lifecycle', () => {
       new Date('2030-01-07T07:00:00.000Z'),
       [{ serviceId, quantity: 1 }],
     );
-    await expect(bookings.setStatus(organizationId, statusBooking.id, 'COMPLETED')).rejects.toThrow(
+    await expect(bookings.setStatus(organizationId, statusBooking.id, 'COMPLETED', userId)).rejects.toThrow(
       'not allowed',
     );
     expect((await bookings.setStatus(organizationId, statusBooking.id, 'CHECKED_IN')).status).toBe(
@@ -323,7 +323,7 @@ describe('Milestone 10 booking lifecycle', () => {
     expect((await bookings.setStatus(organizationId, statusBooking.id, 'IN_PROGRESS')).status).toBe(
       'IN_PROGRESS',
     );
-    expect((await bookings.setStatus(organizationId, statusBooking.id, 'COMPLETED')).status).toBe(
+    expect((await bookings.setStatus(organizationId, statusBooking.id, 'COMPLETED', userId)).status).toBe(
       'COMPLETED',
     );
   });

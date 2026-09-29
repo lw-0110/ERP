@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Inject, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { PermissionGuard } from '../authorization/permission.guard.js';
 import { RequirePermission } from '../authorization/permission.decorator.js';
 import { CategoryDto, PaginationDto, ResourceTypeDto, ServiceDto, StatusDto } from './dto.js';
@@ -7,6 +7,9 @@ import { tenantContext, type TenantRequest } from './tenant-request.js';
 
 @Controller() @UseGuards(PermissionGuard)
 export class ServiceController {
+  private assertCommissionPermission(req: TenantRequest, dto: ServiceDto) {
+    if (dto.commissionPercentage !== undefined && !req.identity?.permissions?.includes('service.commission.manage')) throw new ForbiddenException();
+  }
   constructor(@Inject(ServiceService) private readonly services: ServiceService) {}
   @Post('service-categories') @RequirePermission('service.category.manage') createCategory(@Req() req: TenantRequest, @Body() dto: CategoryDto) { return this.services.createCategory(tenantContext(req).organizationId, dto); }
   @Get('service-categories') @RequirePermission('service.read') categories(@Req() req: TenantRequest) { return this.services.listCategories(tenantContext(req).organizationId); }
@@ -16,9 +19,9 @@ export class ServiceController {
   @Get('resource-types') @RequirePermission('resource.read') resourceTypes(@Req() req: TenantRequest) { return this.services.listResourceTypes(tenantContext(req).organizationId); }
   @Patch('resource-types/:id') @RequirePermission('resource.type.manage') updateResourceType(@Req() req: TenantRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ResourceTypeDto) { return this.services.updateResourceType(tenantContext(req).organizationId, id, dto); }
   @Patch('resource-types/:id/status') @RequirePermission('resource.type.manage') resourceTypeStatus(@Req() req: TenantRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: StatusDto) { return this.services.setResourceTypeStatus(tenantContext(req).organizationId, id, dto.status); }
-  @Post('services') @RequirePermission('service.create') create(@Req() req: TenantRequest, @Body() dto: ServiceDto) { return this.services.create(tenantContext(req).organizationId, dto); }
+  @Post('services') @RequirePermission('service.create') create(@Req() req: TenantRequest, @Body() dto: ServiceDto) { this.assertCommissionPermission(req, dto); return this.services.create(tenantContext(req).organizationId, dto); }
   @Get('services') @RequirePermission('service.read') list(@Req() req: TenantRequest, @Query() query: PaginationDto) { return this.services.list(tenantContext(req).organizationId, query); }
   @Get('services/:id') @RequirePermission('service.read') get(@Req() req: TenantRequest, @Param('id', ParseUUIDPipe) id: string) { return this.services.get(tenantContext(req).organizationId, id); }
-  @Patch('services/:id') @RequirePermission('service.update') update(@Req() req: TenantRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ServiceDto) { return this.services.update(tenantContext(req).organizationId, id, dto); }
+  @Patch('services/:id') @RequirePermission('service.update') update(@Req() req: TenantRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ServiceDto) { this.assertCommissionPermission(req, dto); return this.services.update(tenantContext(req).organizationId, id, dto); }
   @Patch('services/:id/status') @RequirePermission('service.disable') status(@Req() req: TenantRequest, @Param('id', ParseUUIDPipe) id: string, @Body() dto: StatusDto) { return this.services.setStatus(tenantContext(req).organizationId, id, dto.status); }
 }
