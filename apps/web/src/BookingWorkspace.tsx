@@ -1,7 +1,10 @@
+import { apiFetch } from './api-fetch.js';
+import { t, locale, translateStatus } from './i18n.js';
 import { type FormEvent, useEffect, useState } from 'react';
 import { hasPermission, type PermissionContext } from './permissions.js';
 import { getUserFriendlyError, readApiError } from './error-messages.js';
 import { DataTable, FormDialog, RecordDrawer, RecordField, RecordSection } from './ui.js';
+import { formatMoney } from './money.js';
 
 const api = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 export type BookingSection = 'profile' | 'book' | 'mine' | 'assigned' | 'admin' | 'resources' | 'hours' | 'schedules';
@@ -67,7 +70,7 @@ const activeStaffAssignments = (line: BookingLine) => (line.staffAssignments ?? 
 const assignedStaffSelections = (booking: Booking) => Object.fromEntries(booking.services.map((line) => [line.id, activeStaffAssignments(line)[0]?.staffId ?? '']));
 
 async function request(path: string, init?: RequestInit) {
-  const response = await fetch(`${api}${path}`, {
+  const response = await apiFetch(`${api}${path}`, {
     credentials: 'include',
     ...init,
     headers: { 'content-type': 'application/json', ...init?.headers },
@@ -256,14 +259,14 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
     <section className="panel">
       {error && (
         <p role="alert" className="error">
-          {error}
+          {t(error)}
         </p>
       )}
-      {message && <p role="status">{message}</p>}
-      {loading && <p>Loading…</p>}
+      {message && <p role="status">{t(message)}</p>}
+      {loading && <p>{t("Loading…")}</p>}
       {section === 'profile' && (
         <>
-          <h2>My customer profile</h2>
+          <h2>{t("My customer profile")}</h2>
           {hasPermission(identity, 'customer.update.own') && <form
             key={profile ? `${profile.firstName}-${profile.lastName}-${profile.phone}` : 'empty-profile'}
             className="stack"
@@ -281,26 +284,26 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
               );
             }}
           >
-            <label>First name<input
+            <label>{t("First name")}<input
               name="firstName"
               defaultValue={profile?.firstName}
               required
             /></label>
-            <label>Last name<input
+            <label>{t("Last name")}<input
               name="lastName"
               defaultValue={profile?.lastName}
               required
             /></label>
-            <label>Phone<input name="phone" defaultValue={profile?.phone} required /></label>
-            <button>Complete profile</button>
+            <label>{t("Phone")}<input name="phone" defaultValue={profile?.phone} required /></label>
+            <button>{t("Complete profile")}</button>
           </form>}
         </>
       )}
       {section === 'book' && (
         <>
-          <h2>Book appointment</h2>
+          <h2>{t("Book appointment")}</h2>
           {!profile ? (
-            <p>Complete your customer profile before booking.</p>
+            <p>{t("Complete your customer profile before booking.")}</p>
           ) : (
             <form
               className="stack"
@@ -320,53 +323,53 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
               }}
             >
               <label>
-                Choose services (executed in the order shown)
+                {t("Choose services (executed in the order shown)")}
                 <select name="serviceIds" multiple required>
                   {services.map((service) => (
                     <option key={service.id} value={service.id}>
-                      {service.name} · {service.durationMinutes} min · {service.priceMinor}{' '}
-                      {service.currency} minor units
+                      {service.name} · {service.durationMinutes} {t("min ·")} {service.priceMinor}{' '}
+                      {service.currency} {t("minor units")}
                     </option>
                   ))}
                 </select>
               </label>
-              <label>Start time<input type="datetime-local" name="start" required /></label>
-              <button>Check and book</button>
+              <label>{t("Start time")}<input type="datetime-local" name="start" required /></label>
+              <button>{t("Check and book")}</button>
             </form>
           )}
         </>
       )}
       {(section === 'mine' || section === 'assigned' || section === 'admin') && (
         <>
-          <h2>{section === 'mine' ? 'My bookings' : section === 'assigned' ? 'Assigned work' : 'Bookings'}</h2>
-          <DataTable rows={bookings} loading={loading} selectedId={selectedBooking?.id} onSelect={(booking) => { void selectBooking(booking); }} mobileSummary={(booking, index) => <><small>#{index + 1}</small><strong>{booking.customer?.displayName ?? 'Booking'}</strong><span>{new Date(booking.startDateTime).toLocaleString()}</span><small>{booking.services.map((line) => services.find((service) => service.id === line.serviceId)?.name ?? `Service ${line.sortOrder + 1}`).join(', ')}</small><span>{booking.status} · {booking.paymentStatus}</span><small>Staff: {booking.services.flatMap((line) => activeStaffAssignments(line).map((assignment) => assignment.staff?.displayName ?? staff.find((person) => person.id === assignment.staffId)?.displayName ?? 'Assigned')).join(', ') || 'Not assigned'}</small></>} empty="No bookings yet." columns={[{ label: 'No.', render: (booking) => bookings.findIndex((row) => row.id === booking.id) + 1 }, { label: 'Customer', render: (booking) => booking.customer?.displayName ?? '—' }, { label: 'Phone', render: (booking) => booking.customer?.phone ?? '—' }, { label: 'Date', render: (booking) => new Date(booking.startDateTime).toLocaleDateString() }, { label: 'Time', render: (booking) => new Date(booking.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, { label: 'Status', render: (booking) => booking.status }, { label: 'Payment', render: (booking) => booking.paymentStatus }, { label: 'Assigned Staff', render: (booking) => booking.services.flatMap((line) => activeStaffAssignments(line).map((assignment) => assignment.staff?.displayName ?? staff.find((person) => person.id === assignment.staffId)?.displayName ?? 'Assigned')).join(', ') || '—' }]} />
+          <h2>{section === 'mine' ? t('My bookings') : section === 'assigned' ? t('Assigned work') : t('Bookings')}</h2>
+          <DataTable rows={bookings} loading={loading} selectedId={selectedBooking?.id} onSelect={(booking) => { void selectBooking(booking); }} mobileSummary={(booking, index) => <><small>#{index + 1}</small><strong>{booking.customer?.displayName ?? t('Booking')}</strong><span>{new Date(booking.startDateTime).toLocaleString(locale())}</span><small>{booking.services.map((line) => services.find((service) => service.id === line.serviceId)?.name ?? `Service ${line.sortOrder + 1}`).join(', ')}</small><span>{translateStatus(booking.status)} · {translateStatus(booking.paymentStatus)}</span><small>{t("Staff:")} {booking.services.flatMap((line) => activeStaffAssignments(line).map((assignment) => assignment.staff?.displayName ?? staff.find((person) => person.id === assignment.staffId)?.displayName ?? t('Assigned'))).join(', ') || t('Not assigned')}</small></>} empty={t("No bookings yet.")} columns={[{ label: 'No.', render: (booking) => bookings.findIndex((row) => row.id === booking.id) + 1 }, { label: 'Customer', render: (booking) => booking.customer?.displayName ?? '—' }, { label: 'Phone', render: (booking) => booking.customer?.phone ?? '—' }, { label: 'Date', render: (booking) => new Date(booking.startDateTime).toLocaleDateString(locale()) }, { label: 'Time', render: (booking) => new Date(booking.startDateTime).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) }, { label: 'Status', render: (booking) => booking.status }, { label: 'Payment', render: (booking) => booking.paymentStatus }, { label: 'Assigned Staff', render: (booking) => booking.services.flatMap((line) => activeStaffAssignments(line).map((assignment) => assignment.staff?.displayName ?? staff.find((person) => person.id === assignment.staffId)?.displayName ?? t('Assigned'))).join(', ') || '—' }]} />
           {selectedBooking && (
-            <RecordDrawer title="Booking Details" open={Boolean(selectedBooking)} onClose={() => setSelectedBooking(undefined)} actions={<>
-              {section === 'admin' && selectedBooking.services.map((line) => <div key={line.id} className="record-action-pair">{hasPermission(identity, 'booking.assign_staff') && ['CONFIRMED', 'IN_PROGRESS'].includes(selectedBooking.status) && <button type="button" onClick={() => setBookingAction({ kind: 'staff', lineId: line.id })}>Assign Staff{selectedBooking.services.length > 1 ? ` · ${line.sortOrder + 1}` : ''}</button>}{hasPermission(identity, 'booking.assign_resource') && ['CONFIRMED', 'IN_PROGRESS'].includes(selectedBooking.status) && <button type="button" className="secondary" onClick={() => setBookingAction({ kind: 'resource', lineId: line.id })}>Assign Resource{selectedBooking.services.length > 1 ? ` · ${line.sortOrder + 1}` : ''}</button>}{hasPermission(identity, 'booking.assign_staff') && activeStaffAssignments(line).length > 0 && ['CONFIRMED', 'IN_PROGRESS'].includes(selectedBooking.status) && <button type="button" className="secondary" onClick={() => setUnassignLineId(line.id)}>Unassign Staff</button>}</div>)}
-              {showMoreBookingActions && <details className="record-action-more"><summary>More actions</summary><div>
-              {section === 'admin' && hasPermission(identity, 'booking.status.update') && ['CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS'].includes(selectedBooking.status) && <button type="button" className="secondary" onClick={() => setBookingAction({ kind: 'status' })}>Update Status</button>}
-              {((section === 'mine' && selectedBooking.status === 'CONFIRMED' && eligibility?.reschedule.allowed && hasPermission(identity, 'booking.reschedule.own')) || (section === 'admin' && selectedBooking.status === 'CONFIRMED' && hasPermission(identity, 'booking.reschedule.all'))) && <button type="button" className="secondary" onClick={() => setBookingAction({ kind: 'reschedule' })}>Reschedule</button>}
-              {((section === 'mine' && selectedBooking.status === 'CONFIRMED' && eligibility?.cancel.allowed && hasPermission(identity, 'booking.cancel.own')) || (section === 'admin' && selectedBooking.status === 'CONFIRMED' && hasPermission(identity, 'booking.cancel.all'))) && <button type="button" className="secondary" onClick={() => setBookingAction({ kind: 'cancel' })}>Cancel Booking</button>}
+            <RecordDrawer title={t("Booking Details")} open={Boolean(selectedBooking)} onClose={() => setSelectedBooking(undefined)} actions={<>
+              {section === 'admin' && selectedBooking.services.map((line) => <div key={line.id} className="record-action-pair">{hasPermission(identity, 'booking.assign_staff') && ['CONFIRMED', 'IN_PROGRESS'].includes(selectedBooking.status) && <button type="button" onClick={() => setBookingAction({ kind: 'staff', lineId: line.id })}>{t("Assign Staff")}{selectedBooking.services.length > 1 ? ` · ${line.sortOrder + 1}` : ''}</button>}{hasPermission(identity, 'booking.assign_resource') && ['CONFIRMED', 'IN_PROGRESS'].includes(selectedBooking.status) && <button type="button" className="secondary" onClick={() => setBookingAction({ kind: 'resource', lineId: line.id })}>{t("Assign Resource")}{selectedBooking.services.length > 1 ? ` · ${line.sortOrder + 1}` : ''}</button>}{hasPermission(identity, 'booking.assign_staff') && activeStaffAssignments(line).length > 0 && ['CONFIRMED', 'IN_PROGRESS'].includes(selectedBooking.status) && <button type="button" className="secondary" onClick={() => setUnassignLineId(line.id)}>{t("Unassign Staff")}</button>}</div>)}
+              {showMoreBookingActions && <details className="record-action-more"><summary>{t("More actions")}</summary><div>
+              {section === 'admin' && hasPermission(identity, 'booking.status.update') && ['CONFIRMED', 'CHECKED_IN', 'IN_PROGRESS'].includes(selectedBooking.status) && <button type="button" className="secondary" onClick={() => setBookingAction({ kind: 'status' })}>{t("Update Status")}</button>}
+              {((section === 'mine' && selectedBooking.status === 'CONFIRMED' && eligibility?.reschedule.allowed && hasPermission(identity, 'booking.reschedule.own')) || (section === 'admin' && selectedBooking.status === 'CONFIRMED' && hasPermission(identity, 'booking.reschedule.all'))) && <button type="button" className="secondary" onClick={() => setBookingAction({ kind: 'reschedule' })}>{t("Reschedule")}</button>}
+              {((section === 'mine' && selectedBooking.status === 'CONFIRMED' && eligibility?.cancel.allowed && hasPermission(identity, 'booking.cancel.own')) || (section === 'admin' && selectedBooking.status === 'CONFIRMED' && hasPermission(identity, 'booking.cancel.all'))) && <button type="button" className="secondary" onClick={() => setBookingAction({ kind: 'cancel' })}>{t("Cancel Booking")}</button>}
               </div></details>}
             </>}>
-              {error && <p role="alert" className="error">{error}</p>}{message && <p role="status">{message}</p>}
-              <RecordSection title="Customer"><RecordField label="Name">{selectedBooking.customer?.displayName ?? (profile ? `${profile.firstName} ${profile.lastName}` : '—')}</RecordField>{selectedBooking.customer?.phone && <RecordField label="Phone">{selectedBooking.customer.phone}</RecordField>}{selectedBooking.customer?.email && <RecordField label="Email">{selectedBooking.customer.email}</RecordField>}</RecordSection>
-              <RecordSection title="Schedule"><RecordField label="Date">{new Date(selectedBooking.startDateTime).toLocaleDateString()}</RecordField><RecordField label="Time">{new Date(selectedBooking.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(selectedBooking.endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</RecordField></RecordSection>
-              <RecordSection title="Booking"><RecordField label="Status">{selectedBooking.status}</RecordField><RecordField label="Payment">{selectedBooking.paymentStatus}</RecordField>{selectedBooking.customerNote && <RecordField label="Customer note">{selectedBooking.customerNote}</RecordField>}{selectedBooking.internalNote && <RecordField label="Internal note">{selectedBooking.internalNote}</RecordField>}</RecordSection>
-              <RecordSection title="Services & Assignments">{selectedBooking.services.map((line) => <div key={line.id}><h4>{services.find((service) => service.id === line.serviceId)?.name ?? `Service ${line.sortOrder + 1}`}</h4>{line.durationMinutesSnapshot && <RecordField label="Duration">{line.durationMinutesSnapshot} min</RecordField>}{line.lineTotalMinor != null && <RecordField label="Price">{line.lineTotalMinor} {line.currencySnapshot} minor units</RecordField>}<RecordField label="Assigned Staff">{activeStaffAssignments(line).map((assignment) => assignedStaffName(line, assignment.staffId)).join(', ') || 'Not assigned'}</RecordField><RecordField label="Resource">{(line.resourceAssignments ?? []).filter((assignment) => !assignment.status || assignment.status === 'ACTIVE').map((assignment) => resources.find((resource) => resource.id === assignment.resourceId)?.name ?? 'Assigned resource').join(', ') || 'Not assigned'}</RecordField></div>)}</RecordSection>
-              {paymentSummary?.totalsByCurrency.length ? <RecordSection title="Payment summary"><ul>{paymentSummary.totalsByCurrency.map((total) => <li key={total.currency}>{total.currency}: booked {total.bookedMinor} minor units; recorded payments {total.paidMinor} minor units</li>)}</ul></RecordSection> : null}
-              <FormDialog title={bookingAction?.kind === 'staff' ? 'Assign Staff' : bookingAction?.kind === 'resource' ? 'Assign Resource' : bookingAction?.kind === 'status' ? 'Update Status' : bookingAction?.kind === 'reschedule' ? 'Reschedule Booking' : 'Cancel Booking'} open={Boolean(bookingAction)} onClose={() => setBookingAction(null)}>
-              {error && <p role="alert" className="error">{error}</p>}
+              {error && <p role="alert" className="error">{t(error)}</p>}{message && <p role="status">{t(message)}</p>}
+              <RecordSection title={t("Customer")}><RecordField label={t("Name")}>{selectedBooking.customer?.displayName ?? (profile ? `${profile.firstName} ${profile.lastName}` : '—')}</RecordField>{selectedBooking.customer?.phone && <RecordField label={t("Phone")}>{selectedBooking.customer.phone}</RecordField>}{selectedBooking.customer?.email && <RecordField label={t("Email")}>{selectedBooking.customer.email}</RecordField>}</RecordSection>
+              <RecordSection title={t("Schedule")}><RecordField label={t("Date")}>{new Date(selectedBooking.startDateTime).toLocaleDateString(locale())}</RecordField><RecordField label={t("Time")}>{new Date(selectedBooking.startDateTime).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })} – {new Date(selectedBooking.endDateTime).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })}</RecordField></RecordSection>
+              <RecordSection title={t("Booking")}><RecordField label={t("Status")}>{translateStatus(selectedBooking.status)}</RecordField><RecordField label={t("Payment")}>{translateStatus(selectedBooking.paymentStatus)}</RecordField>{selectedBooking.customerNote && <RecordField label={t("Customer note")}>{selectedBooking.customerNote}</RecordField>}{selectedBooking.internalNote && <RecordField label={t("Internal note")}>{selectedBooking.internalNote}</RecordField>}</RecordSection>
+              <RecordSection title={t("Services & Assignments")}>{selectedBooking.services.map((line) => <div key={line.id}><h4>{services.find((service) => service.id === line.serviceId)?.name ?? `Service ${line.sortOrder + 1}`}</h4>{line.durationMinutesSnapshot && <RecordField label={t("Duration")}>{line.durationMinutesSnapshot} {t("min")}</RecordField>}{line.lineTotalMinor != null && <RecordField label={t("Price")}>{formatMoney(line.lineTotalMinor, line.currencySnapshot ?? 'MYR')}</RecordField>}<RecordField label={t("Assigned Staff")}>{activeStaffAssignments(line).map((assignment) => assignedStaffName(line, assignment.staffId)).join(', ') || t('Not assigned')}</RecordField><RecordField label={t("Resource")}>{(line.resourceAssignments ?? []).filter((assignment) => !assignment.status || assignment.status === 'ACTIVE').map((assignment) => resources.find((resource) => resource.id === assignment.resourceId)?.name ?? t('Assigned resource')).join(', ') || t('Not assigned')}</RecordField></div>)}</RecordSection>
+              {paymentSummary?.totalsByCurrency.length ? <RecordSection title={t("Payment summary")}><ul>{paymentSummary.totalsByCurrency.map((total) => <li key={total.currency}>{total.currency}{t(": booked")} {total.bookedMinor} {t("minor units; recorded payments")} {total.paidMinor} {t("minor units")}</li>)}</ul></RecordSection> : null}
+              <FormDialog title={bookingAction?.kind === 'staff' ? t('Assign Staff') : bookingAction?.kind === 'resource' ? t('Assign Resource') : bookingAction?.kind === 'status' ? t('Update Status') : bookingAction?.kind === 'reschedule' ? t('Reschedule Booking') : t('Cancel Booking')} open={Boolean(bookingAction)} onClose={() => setBookingAction(null)}>
+              {error && <p role="alert" className="error">{t(error)}</p>}
               {section === 'mine' && eligibility && (
                 <div className="stack">
                   {bookingAction?.kind === 'cancel' && !eligibility.cancel.allowed && (
-                    <p>Cancellation unavailable: {eligibility.cancel.reason}.</p>
+                    <p>{t("Cancellation unavailable:")} {eligibility.cancel.reason}.</p>
                   )}
                   {bookingAction?.kind === 'cancel' && eligibility.cancel.allowed && hasPermission(identity, 'booking.cancel.own') && (
                     <form
                       className="inline"
                       onSubmit={(event) => {
-                        if (!window.confirm('Cancel this booking? This does not issue a refund.')) {
+                        if (!window.confirm(t('Cancel this booking? This does not issue a refund.'))) {
                           event.preventDefault();
                           return;
                         }
@@ -375,12 +378,12 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                         void performBookingAction(`/bookings/${selectedBooking.id}/cancel`, json('PATCH', { reason: data.get('reason') || undefined }));
                       }}
                     >
-                      <input name="reason" maxLength={1000} placeholder="Optional reason" />
-                      <button>Cancel booking</button>
+                      <input name="reason" maxLength={1000} placeholder={t("Optional reason")} />
+                      <button>{t("Cancel booking")}</button>
                     </form>
                   )}
                   {bookingAction?.kind === 'reschedule' && !eligibility.reschedule.allowed && (
-                    <p>Rescheduling unavailable: {eligibility.reschedule.reason}.</p>
+                    <p>{t("Rescheduling unavailable:")} {eligibility.reschedule.reason}.</p>
                   )}
                   {bookingAction?.kind === 'reschedule' && eligibility.reschedule.allowed &&
                     hasPermission(identity, 'booking.reschedule.own') && (
@@ -388,7 +391,7 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                         className="stack"
                         onSubmit={(event) => {
                           const data = form(event);
-                          if (!window.confirm('Move this booking to the selected time?')) {
+                          if (!window.confirm(t('Move this booking to the selected time?'))) {
                             event.preventDefault();
                             return;
                           }
@@ -397,8 +400,8 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                         }}
                       >
                         <input name="newStartDateTime" type="datetime-local" required />
-                        <input name="reason" maxLength={1000} placeholder="Optional reason" />
-                        <button>Check availability and reschedule</button>
+                        <input name="reason" maxLength={1000} placeholder={t("Optional reason")} />
+                        <button>{t("Check availability and reschedule")}</button>
                       </form>
                     )}
                 </div>
@@ -414,8 +417,8 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                           if (
                             !window.confirm(
                               ['PARTIALLY_PAID', 'PAID'].includes(selectedBooking.paymentStatus)
-                                ? 'This booking has recorded payment status. Cancel without an automatic refund?'
-                                : 'Cancel this booking?',
+                                ? t('This booking has recorded payment status. Cancel without an automatic refund?')
+                                : t('Cancel this booking?'),
                             )
                           ) {
                             event.preventDefault();
@@ -425,8 +428,8 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                           void performBookingAction(`/admin/bookings/${selectedBooking.id}/cancel`, json('PATCH', { reason: data.get('reason') || undefined }));
                         }}
                       >
-                        <input name="reason" maxLength={1000} placeholder="Optional note" />
-                        <button>Cancel booking</button>
+                        <input name="reason" maxLength={1000} placeholder={t("Optional note")} />
+                        <button>{t("Cancel booking")}</button>
                       </form>
                     )}
                   {bookingAction?.kind === 'reschedule' && selectedBooking.status === 'CONFIRMED' &&
@@ -440,8 +443,8 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                         }}
                       >
                         <input name="newStartDateTime" type="datetime-local" required />
-                        <input name="reason" maxLength={1000} placeholder="Optional note" />
-                        <button>Check capacity and reschedule</button>
+                        <input name="reason" maxLength={1000} placeholder={t("Optional note")} />
+                        <button>{t("Check capacity and reschedule")}</button>
                       </form>
                     )}
                   {bookingAction?.kind === 'status' && hasPermission(identity, 'booking.status.update') &&
@@ -461,21 +464,21 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                               ? ['IN_PROGRESS']
                               : ['COMPLETED']
                           ).map((status) => (
-                            <option key={status}>{status}</option>
+                            <option key={status} value={status}>{translateStatus(status)}</option>
                           ))}
                         </select>
-                        <button>Update status</button>
+                        <button>{t("Update status")}</button>
                       </form>
                     )}
                   {selectedBooking.services.filter((line) => line.id === actionLine?.id).map((line) => (
                     <div key={line.id}>
-                      <h4>Service {line.sortOrder + 1}</h4>
+                      <h4>{t("Service")} {line.sortOrder + 1}</h4>
                       {bookingAction?.kind === 'staff' && hasPermission(identity, 'booking.assign_staff') && (
                         <div className="staff-assignment-control">
-                          <p><strong>Current Staff</strong><br />{activeStaffAssignments(line).length ? activeStaffAssignments(line).map((assignment) => assignedStaffName(line, assignment.staffId)).join(', ') : 'Not assigned'}</p>
+                          <p><strong>{t("Current Staff")}</strong><br />{activeStaffAssignments(line).length ? activeStaffAssignments(line).map((assignment) => assignedStaffName(line, assignment.staffId)).join(', ') : t('Not assigned')}</p>
                           <form className="inline" onSubmit={(event) => { event.preventDefault(); const staffId = staffSelections[line.id] ?? ''; if (staffId) void changeStaffAssignment(line, [staffId], activeStaffAssignments(line).length ? 'change' : 'assign'); }}>
-                          <label>Choose staff<select name="staffId" value={staffSelections[line.id] ?? ''} onChange={(event) => setStaffSelections((current) => ({ ...current, [line.id]: event.target.value }))}>
-                            <option value="">Select staff</option>
+                          <label>{t("Choose staff")}<select name="staffId" value={staffSelections[line.id] ?? ''} onChange={(event) => setStaffSelections((current) => ({ ...current, [line.id]: event.target.value }))}>
+                            <option value="">{t("Select staff")}</option>
                             {activeStaffAssignments(line).filter((assignment) => !(eligibleStaff[line.id] ?? []).some((person) => person.id === assignment.staffId)).map((assignment) => <option key={assignment.staffId} value={assignment.staffId}>{assignedStaffName(line, assignment.staffId)}</option>)}
                             {(eligibleStaff[line.id] ?? []).map((person) => (
                               <option key={person.id} value={person.id}>
@@ -484,7 +487,7 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                               </option>
                             ))}
                           </select></label>
-                          <button disabled={Boolean(staffAssignmentBusy) || !staffSelections[line.id] || activeStaffAssignments(line).some((assignment) => assignment.staffId === staffSelections[line.id])}>{staffAssignmentBusy === line.id ? 'Assigning…' : 'Assign staff'}</button>
+                          <button disabled={Boolean(staffAssignmentBusy) || !staffSelections[line.id] || activeStaffAssignments(line).some((assignment) => assignment.staffId === staffSelections[line.id])}>{staffAssignmentBusy === line.id ? t('Assigning…') : t('Assign staff')}</button>
                           </form>
                         </div>
                       )}
@@ -498,14 +501,14 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                           }}
                         >
                           <select name="resourceId">
-                            <option value="">Unassigned</option>
+                            <option value="">{t("Unassigned")}</option>
                             {(eligibleResources[line.id] ?? []).map((resource) => (
                               <option key={resource.id} value={resource.id}>
                                 {resource.name}
                               </option>
                             ))}
                           </select>
-                          <button>Assign resource</button>
+                          <button>{t("Assign resource")}</button>
                         </form>
                       )}
                     </div>
@@ -515,23 +518,23 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
               </FormDialog>
             </RecordDrawer>
           )}
-          <FormDialog title="Unassign Staff" open={Boolean(unassignLineId)} onClose={() => setUnassignLineId(null)}>
+          <FormDialog title={t("Unassign Staff")} open={Boolean(unassignLineId)} onClose={() => setUnassignLineId(null)}>
             {selectedBooking?.services.filter((line) => line.id === unassignLineId).map((line) => <div key={line.id} className="stack">
-              <p>Remove {activeStaffAssignments(line).map((assignment) => assignedStaffName(line, assignment.staffId)).join(', ')} from this booking?</p>
-              <div className="dialog-actions"><button type="button" className="secondary" onClick={() => setUnassignLineId(null)}>Cancel</button><button type="button" disabled={Boolean(staffAssignmentBusy)} onClick={() => { setUnassignLineId(null); void changeStaffAssignment(line, [], 'unassign'); }}>Unassign</button></div>
+              <p>{t("Remove")} {activeStaffAssignments(line).map((assignment) => assignedStaffName(line, assignment.staffId)).join(', ')} {t("from this booking?")}</p>
+              <div className="dialog-actions"><button type="button" className="secondary" onClick={() => setUnassignLineId(null)}>{t("Cancel")}</button><button type="button" disabled={Boolean(staffAssignmentBusy)} onClick={() => { setUnassignLineId(null); void changeStaffAssignment(line, [], 'unassign'); }}>{t("Unassign")}</button></div>
             </div>)}
           </FormDialog>
         </>
       )}
       {section === 'resources' && (
         <>
-          <div className="page-header"><h2>Resources</h2><div className="page-actions">{hasPermission(identity, 'resource.type.manage') && <button type="button" className="secondary" onClick={() => setResourceTypeEditing(null)}>New resource type</button>}{hasPermission(identity, 'resource.create') && <button type="button" onClick={() => setResourceEditing(null)}>New resource</button>}</div></div>
-          <DataTable rows={resources} loading={loading} selectedId={selectedResource?.id} onSelect={setSelectedResource} mobileSummary={(resource) => <><strong>{resource.name}</strong><span>Capacity {resource.capacity}</span><small>{resource.status}</small></>} empty="No resources yet." columns={[{ label: 'Resource', render: (resource) => resource.name }, { label: 'Capacity', render: (resource) => resource.capacity }, { label: 'Status', render: (resource) => resource.status }]} />
-          <RecordDrawer title="Resource Details" open={Boolean(selectedResource)} onClose={() => setSelectedResource(undefined)} actions={selectedResource && <>{hasPermission(identity, 'resource.update') && <button type="button" onClick={() => setResourceEditing(selectedResource)}>Edit</button>}{selectedResource.status === 'ACTIVE' && hasPermission(identity, 'resource.disable') && <button type="button" className="secondary" onClick={() => { if (!window.confirm(`Archive ${selectedResource.name}? Historical records will remain available.`)) return; void request(`/resources/${selectedResource.id}/status`, json('PATCH', {})).then(() => { setSelectedResource(undefined); void load(); }).catch((cause: Error) => setError(cause.message)); }}>Archive resource</button>}</>}>{selectedResource && <RecordSection title="Resource"><RecordField label="Name">{selectedResource.name}</RecordField><RecordField label="Type">{resourceTypes.find((type) => type.id === selectedResource.resourceTypeId)?.name ?? '—'}</RecordField><RecordField label="Capacity">{selectedResource.capacity}</RecordField><RecordField label="Status">{selectedResource.status}</RecordField></RecordSection>}</RecordDrawer>
-          <h3>Resource Types</h3><DataTable rows={resourceTypes} selectedId={selectedResourceType?.id} onSelect={setSelectedResourceType} mobileSummary={(type) => <strong>{type.name}</strong>} empty="No resource types yet." columns={[{ label: 'Name', render: (type) => type.name }]} />
-          <RecordDrawer title="Resource Type Details" open={Boolean(selectedResourceType)} onClose={() => setSelectedResourceType(undefined)} actions={selectedResourceType && hasPermission(identity, 'resource.type.manage') && <><button type="button" onClick={() => setResourceTypeEditing(selectedResourceType)}>Edit</button>{selectedResourceType.status === 'ACTIVE' && <button type="button" className="secondary" onClick={() => { if (!window.confirm(`Deactivate ${selectedResourceType.name}? Historical records will remain available.`)) return; void request(`/resource-types/${selectedResourceType.id}/status`, json('PATCH', { status: 'INACTIVE' })).then(() => { setSelectedResourceType(undefined); void load(); }).catch((cause: Error) => setError(cause.message)); }}>Deactivate</button>}</>}>{selectedResourceType && <RecordSection title="Resource type"><RecordField label="Name">{selectedResourceType.name}</RecordField><RecordField label="Status">{selectedResourceType.status}</RecordField></RecordSection>}</RecordDrawer>
-          <FormDialog title={resourceTypeEditing ? 'Edit Resource Type' : 'New Resource Type'} open={resourceTypeEditing !== undefined} onClose={() => setResourceTypeEditing(undefined)}><form key={resourceTypeEditing?.id ?? 'new'} className="stack" onSubmit={(event) => { const data = form(event); void submit(event, () => request(resourceTypeEditing ? `/resource-types/${resourceTypeEditing.id}` : '/resource-types', json(resourceTypeEditing ? 'PATCH' : 'POST', { name: data.get('name') })).then((result: ResourceType) => { setSelectedResourceType(result); return result; }), () => setResourceTypeEditing(undefined)); }}><label>Name<input name="name" defaultValue={resourceTypeEditing?.name ?? ''} required /></label><div className="dialog-actions"><button type="button" className="secondary" onClick={() => setResourceTypeEditing(undefined)}>Cancel</button><button>Save type</button></div></form></FormDialog>
-          {(hasPermission(identity, 'resource.create') || hasPermission(identity, 'resource.update')) && <FormDialog title={`${resourceEditing ? 'Edit' : 'New'} resource`} open={resourceEditing !== undefined} onClose={() => setResourceEditing(undefined)}>
+          <div className="page-header"><h2>{t("Resources")}</h2><div className="page-actions">{hasPermission(identity, 'resource.type.manage') && <button type="button" className="secondary" onClick={() => setResourceTypeEditing(null)}>{t("New resource type")}</button>}{hasPermission(identity, 'resource.create') && <button type="button" onClick={() => setResourceEditing(null)}>{t("New resource")}</button>}</div></div>
+          <DataTable rows={resources} loading={loading} selectedId={selectedResource?.id} onSelect={setSelectedResource} mobileSummary={(resource) => <><strong>{resource.name}</strong><span>{t("Capacity")} {resource.capacity}</span><small>{translateStatus(resource.status)}</small></>} empty={t("No resources yet.")} columns={[{ label: 'Resource', render: (resource) => resource.name }, { label: 'Capacity', render: (resource) => resource.capacity }, { label: 'Status', render: (resource) => resource.status }]} />
+          <RecordDrawer title={t("Resource Details")} open={Boolean(selectedResource)} onClose={() => setSelectedResource(undefined)} actions={selectedResource && <>{hasPermission(identity, 'resource.update') && <button type="button" onClick={() => setResourceEditing(selectedResource)}>{t("Edit")}</button>}{selectedResource.status === 'ACTIVE' && hasPermission(identity, 'resource.disable') && <button type="button" className="secondary" onClick={() => { if (!window.confirm(t('Archive {{name}}? Historical records will remain available.', { name: selectedResource.name }))) return; void request(`/resources/${selectedResource.id}/status`, json('PATCH', {})).then(() => { setSelectedResource(undefined); void load(); }).catch((cause: Error) => setError(cause.message)); }}>{t("Archive resource")}</button>}</>}>{selectedResource && <RecordSection title={t("Resource")}><RecordField label={t("Name")}>{selectedResource.name}</RecordField><RecordField label={t("Type")}>{resourceTypes.find((type) => type.id === selectedResource.resourceTypeId)?.name ?? '—'}</RecordField><RecordField label={t("Capacity")}>{selectedResource.capacity}</RecordField><RecordField label={t("Status")}>{translateStatus(selectedResource.status)}</RecordField></RecordSection>}</RecordDrawer>
+          <h3>{t("Resource Types")}</h3><DataTable rows={resourceTypes} selectedId={selectedResourceType?.id} onSelect={setSelectedResourceType} mobileSummary={(type) => <strong>{type.name}</strong>} empty={t("No resource types yet.")} columns={[{ label: 'Name', render: (type) => type.name }]} />
+          <RecordDrawer title={t("Resource Type Details")} open={Boolean(selectedResourceType)} onClose={() => setSelectedResourceType(undefined)} actions={selectedResourceType && hasPermission(identity, 'resource.type.manage') && <><button type="button" onClick={() => setResourceTypeEditing(selectedResourceType)}>{t("Edit")}</button>{selectedResourceType.status === 'ACTIVE' && <button type="button" className="secondary" onClick={() => { if (!window.confirm(t('Deactivate {{name}}? Historical records will remain available.', { name: selectedResourceType.name }))) return; void request(`/resource-types/${selectedResourceType.id}/status`, json('PATCH', { status: 'INACTIVE' })).then(() => { setSelectedResourceType(undefined); void load(); }).catch((cause: Error) => setError(cause.message)); }}>{t("Deactivate")}</button>}</>}>{selectedResourceType && <RecordSection title={t("Resource type")}><RecordField label={t("Name")}>{selectedResourceType.name}</RecordField><RecordField label={t("Status")}>{translateStatus(selectedResourceType.status)}</RecordField></RecordSection>}</RecordDrawer>
+          <FormDialog title={resourceTypeEditing ? t('Edit Resource Type') : 'New Resource Type'} open={resourceTypeEditing !== undefined} onClose={() => setResourceTypeEditing(undefined)}><form key={resourceTypeEditing?.id ?? 'new'} className="stack" onSubmit={(event) => { const data = form(event); void submit(event, () => request(resourceTypeEditing ? `/resource-types/${resourceTypeEditing.id}` : '/resource-types', json(resourceTypeEditing ? 'PATCH' : 'POST', { name: data.get('name') })).then((result: ResourceType) => { setSelectedResourceType(result); return result; }), () => setResourceTypeEditing(undefined)); }}><label>{t("Name")}<input name="name" defaultValue={resourceTypeEditing?.name ?? ''} required /></label><div className="dialog-actions"><button type="button" className="secondary" onClick={() => setResourceTypeEditing(undefined)}>{t("Cancel")}</button><button>{t("Save type")}</button></div></form></FormDialog>
+          {(hasPermission(identity, 'resource.create') || hasPermission(identity, 'resource.update')) && <FormDialog title={t('{{action}} resource', { action: t(resourceEditing ? 'Edit' : 'New') })} open={resourceEditing !== undefined} onClose={() => setResourceEditing(undefined)}>
             <form
               key={resourceEditing?.id ?? 'new'}
               className="stack"
@@ -549,39 +552,39 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                 );
               }}
             >
-              <label>Resource name<input
+              <label>{t("Resource name")}<input
                 name="name"
-                placeholder="Name"
+                placeholder={t("Name")}
                 defaultValue={resourceEditing?.name}
                 required
               /></label>
-              <label>Resource type<select name="resourceTypeId" defaultValue={resourceEditing?.resourceTypeId}>
+              <label>{t("Resource type")}<select name="resourceTypeId" defaultValue={resourceEditing?.resourceTypeId}>
                 {resourceTypes.map((type) => (
                   <option key={type.id} value={type.id}>
                     {type.name}
                   </option>
                 ))}
               </select></label>
-              <label>Capacity<input
+              <label>{t("Capacity")}<input
                 name="capacity"
                 type="number"
                 min="1"
                 defaultValue={resourceEditing?.capacity ?? 1}
                 required
               /></label>
-              <div className="dialog-actions"><button type="button" className="secondary" onClick={() => setResourceEditing(undefined)}>Cancel</button><button>Save resource</button></div>
+              <div className="dialog-actions"><button type="button" className="secondary" onClick={() => setResourceEditing(undefined)}>{t("Cancel")}</button><button>{t("Save resource")}</button></div>
             </form>
           </FormDialog>}
         </>
       )}
       {section === 'hours' && (
         <>
-          <h2>Organization opening hours</h2>
+          <h2>{t("Organization opening hours")}</h2>
           {hours.length ? (
             <ul>
               {hours.map((hour) => (
                 <li key={hour.dayOfWeek}>
-                  {weekday[hour.dayOfWeek]}: {hour.openTime}–{hour.closeTime} ({hour.status}){' '}
+                  {t(weekday[hour.dayOfWeek])}: {hour.openTime}–{hour.closeTime} ({translateStatus(hour.status)}){' '}
                   {hasPermission(identity, 'organization.settings.manage') && <button
                     onClick={() => {
                       void request(`/opening-hours/${hour.dayOfWeek}/disable`, json('PATCH', {}))
@@ -589,13 +592,13 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                         .catch((cause: Error) => setError(cause.message));
                     }}
                   >
-                    Disable
+                    {t("Disable")}
                   </button>}
                 </li>
               ))}
             </ul>
           ) : (
-            <p>No opening hours configured.</p>
+            <p>{t("No opening hours configured.")}</p>
           )}
           {hasPermission(identity, 'organization.settings.manage') && <form
             className="inline"
@@ -616,21 +619,21 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
             <select name="day">
               {weekday.map((day, index) => (
                 <option key={day} value={index}>
-                  {day}
+                  {t(day)}
                 </option>
               ))}
             </select>
             <input name="open" type="time" required />
             <input name="close" type="time" required />
-            <button>Save hours</button>
+            <button>{t("Save hours")}</button>
           </form>}
         </>
       )}
       {section === 'schedules' && (
         <>
-          <h2>Staff working schedules</h2>
+          <h2>{t("Staff working schedules")}</h2>
           <select value={selectedStaff} onChange={(event) => setSelectedStaff(event.target.value)}>
-            <option value="">Select staff</option>
+            <option value="">{t("Select staff")}</option>
             {staff.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.displayName}
@@ -643,7 +646,7 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                 <ul>
                   {schedule.map((hour) => (
                     <li key={hour.dayOfWeek}>
-                      {weekday[hour.dayOfWeek]}: {hour.startTime}–{hour.endTime} ({hour.status}){' '}
+                      {t(weekday[hour.dayOfWeek])}: {hour.startTime}–{hour.endTime} ({translateStatus(hour.status)}){' '}
                       {hasPermission(identity, 'staff.schedule.manage') && <button
                         onClick={() => {
                           void request(
@@ -654,13 +657,13 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                             .catch((cause: Error) => setError(cause.message));
                         }}
                       >
-                        Disable
+                        {t("Disable")}
                       </button>}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p>No schedule configured.</p>
+                <p>{t("No schedule configured.")}</p>
               )}
               {hasPermission(identity, 'staff.schedule.manage') && <form
                 className="inline"
@@ -681,13 +684,13 @@ export function BookingWorkspace({ identity, section }: { identity: PermissionCo
                 <select name="day">
                   {weekday.map((day, index) => (
                     <option key={day} value={index}>
-                      {day}
+                      {t(day)}
                     </option>
                   ))}
                 </select>
                 <input name="start" type="time" required />
                 <input name="end" type="time" required />
-                <button>Save schedule</button>
+                <button>{t("Save schedule")}</button>
               </form>}
             </>
           )}

@@ -18,6 +18,7 @@ import { RequirePermission } from '../authorization/permission.decorator.js';
 import { tenantContext, type TenantRequest } from '../business/tenant-request.js';
 import { csv } from './csv.js';
 import { ReportService, type ReportFilter } from './report.service.js';
+import { csvColumn, csvFilename, resolveLanguage } from '../i18n/localize.js';
 
 class ReportQueryDto implements ReportFilter {
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
@@ -157,9 +158,11 @@ export class ReportController {
               ? await this.reports.attendance(organizationId, filter)
               : await this.reports.leave(organizationId, filter);
     response.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    response.setHeader('Content-Disposition', `attachment; filename="${name}.csv"`);
+    const language = resolveLanguage(req.headers['accept-language']);
+    response.setHeader('Content-Disposition', `attachment; filename="${name}.csv"; filename*=UTF-8''${encodeURIComponent(csvFilename(name, language))}`);
     response.setHeader('Cache-Control', 'no-store');
-    return csv(exportHeaders[name], result.rows);
+    response.setHeader('Vary', 'Accept-Language');
+    return csv(exportHeaders[name].map((key) => csvColumn(key, language)), result.rows);
   }
   @Get('exports/bookings.csv') @RequirePermission('report.export') exportBookings(
     @Req() req: TenantRequest,

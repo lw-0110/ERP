@@ -1,3 +1,5 @@
+import { apiFetch } from './api-fetch.js';
+import { t, language, translateStatus } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { hasPermission, type PermissionContext } from './permissions.js';
 import { getUserFriendlyError, readApiError } from './error-messages.js';
@@ -46,7 +48,7 @@ const exports: Partial<Record<Section, string>> = {
   Leave: 'leave',
 };
 function label(value: string) {
-  return value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase());
+  return t(value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase()));
 }
 function dayInZone(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -65,7 +67,9 @@ function previousDays(day: string, count: number) {
 }
 function display(value: unknown): string {
   if (value == null) return '—';
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return value.map(display).join(' · ');
+  if (typeof value === 'object') return Object.entries(value).map(([key, item]) => `${label(key)}: ${display(item)}`).join(' · ');
+  if (typeof value === 'string' && /^[A-Z_]+$/.test(value)) return translateStatus(value);
   return String(value);
 }
 
@@ -101,7 +105,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
   ).toString();
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${api}${path}`, { credentials: 'include', ...init });
+    const response = await apiFetch(`${api}${path}`, { credentials: 'include', ...init });
     if (!response.ok)
       throw new Error(getUserFriendlyError(await readApiError(response)));
     return response.json() as Promise<T>;
@@ -141,15 +145,15 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
   async function download(name: string) {
     setError('');
     try {
-      const response = await fetch(`${api}/exports/${name}.csv?${query}`, {
+      const response = await apiFetch(`${api}/exports/${name}.csv?${query}`, {
         credentials: 'include',
       });
-      if (!response.ok) throw new Error(`Export failed (${response.status}).`);
+      if (!response.ok) throw new Error(t('Export failed ({{status}}).', { status: response.status }));
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${name}.csv`;
+      link.download = language() === 'zh' ? `${({ bookings: '预约', payments: '付款', commissions: '佣金', attendance: '考勤', leave: '请假' } as Record<string, string>)[name] ?? name}.csv` : `${name}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (cause) {
@@ -193,18 +197,18 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
   const rows = report?.rows ?? [];
   const metrics = report ? Object.entries(report).filter(([key, value]) => key !== 'range' && key !== 'rows' && (typeof value === 'number' || Array.isArray(value))) : [];
   const summaryKeys = new Set(['todayBookings', 'activeStaff', 'pendingLeaveRequests', 'recordedPaymentsByCurrency']);
-  const metricValue = (value: unknown) => Array.isArray(value) ? value.length ? value.map((item) => display(item)).join(' · ') : 'No data' : display(value);
+  const metricValue = (value: unknown) => Array.isArray(value) ? value.length ? value.map((item) => display(item)).join(' · ') : t('No data') : display(value);
   return (
     <section className={`panel report-workspace${section === 'Dashboard' ? ' dashboard-page' : ''}`}>
-      <h2>{section}</h2>
-      {section === 'Dashboard' && <p className="page-description">A focused view of your organization’s current activity.</p>}
+      <h2>{t(section)}</h2>
+      {section === 'Dashboard' && <p className="page-description">{t("A focused view of your organization’s current activity.")}</p>}
       {error && (
         <p role="alert" className="error">
-          {error}
+          {t(error)}
         </p>
       )}
-      {message && <p role="status">{message}</p>}
-      {loading && <p>Loading…</p>}
+      {message && <p role="status">{t(message)}</p>}
+      {loading && <p>{t("Loading…")}</p>}
       {section !== 'Settings' && (
         <>
           <form
@@ -215,7 +219,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
             }}
           >
             <label>
-              From
+              {t("From")}
               <input
                 type="date"
                 value={from}
@@ -224,7 +228,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
               />
             </label>
             <label>
-              To
+              {t("To")}
               <input
                 type="date"
                 value={to}
@@ -233,61 +237,61 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
               />
             </label>
             {section === 'Sales' && <label>
-              Status
+              {t("Status")}
               <input
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                placeholder="Optional status"
+                placeholder={t("Optional status")}
               />
             </label>}
             {section === 'Staff detail' && <label>
-              Staff UUID
+              {t("Staff UUID")}
               <input
                 value={staffId}
                 onChange={(event) => setStaffId(event.target.value)}
-                placeholder="Optional staff ID"
+                placeholder={t("Optional staff ID")}
               />
             </label>}
             {section === 'Bookings' && <label>
-              Service UUID
+              {t("Service UUID")}
               <input
                 value={serviceId}
                 onChange={(event) => setServiceId(event.target.value)}
-                placeholder="Optional service ID"
+                placeholder={t("Optional service ID")}
               />
             </label>}
             {section === 'Leave' && <label>
-              Leave type UUID
+              {t("Leave type UUID")}
               <input
                 value={leaveTypeId}
                 onChange={(event) => setLeaveTypeId(event.target.value)}
-                placeholder="Optional type ID"
+                placeholder={t("Optional type ID")}
               />
             </label>}
             {section === 'Sales' && <label>
-              Currency
+              {t("Currency")}
               <input
                 value={currency}
                 onChange={(event) => setCurrency(event.target.value.toUpperCase())}
                 maxLength={3}
-                placeholder="Optional ISO code"
+                placeholder={t("Optional ISO code")}
               />
             </label>}
-            <button>Apply filters</button>
+            <button>{t("Apply filters")}</button>
           </form>
           <div className="inline">
-            <button onClick={() => preset('today')}>Today</button>
-            <button onClick={() => preset('week')}>This week</button>
-            <button onClick={() => preset('month')}>This month</button>
+            <button onClick={() => preset('today')}>{t("Today")}</button>
+            <button onClick={() => preset('week')}>{t("This week")}</button>
+            <button onClick={() => preset('month')}>{t("This month")}</button>
           </div>
-          <p>Dates use {organizationTimeZone}; the end date is included.</p>
+          <p>{t("Dates use")} {organizationTimeZone}{t("; the end date is included.")}</p>
           {exports[section] && hasPermission(identity, 'report.export') && (
             <button
               onClick={() => {
                 void download(exports[section]!);
               }}
             >
-              Export filtered CSV
+              {t("Export filtered CSV")}
             </button>
           )}
         </>
@@ -300,9 +304,9 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
               void saveSettings(event);
             }}
           >
-            <fieldset className="settings-group"><legend>Organization</legend>
+            <fieldset className="settings-group"><legend>{t("Organization")}</legend>
             <label>
-              Organization name
+              {t("Organization name")}
               <input
                 value={settings.name}
                 onChange={(event) => setSettings({ ...settings, name: event.target.value })}
@@ -311,7 +315,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
               />
             </label>
             <label>
-              IANA timezone
+              {t("IANA timezone")}
               <input
                 value={settings.timezone}
                 onChange={(event) => setSettings({ ...settings, timezone: event.target.value })}
@@ -320,7 +324,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
               />
             </label>
             <label>
-              Default ISO currency
+              {t("Default ISO currency")}
               <input
                 value={settings.defaultCurrency}
                 maxLength={3}
@@ -332,9 +336,9 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
               />
             </label>
             </fieldset>
-            <fieldset className="settings-group"><legend>Booking number</legend>
+            <fieldset className="settings-group"><legend>{t("Booking number")}</legend>
             <label>
-              Booking number prefix
+              {t("Booking number prefix")}
               <input
                 value={settings.bookingNumberPrefix}
                 maxLength={16}
@@ -346,10 +350,10 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
                 disabled={!hasPermission(identity, 'organization.settings.manage')}
               />
             </label>
-            <p>Changing the prefix affects future booking numbers only.</p>
+            <p>{t("Changing the prefix affects future booking numbers only.")}</p>
             </fieldset>
             {hasPermission(identity, 'organization.settings.manage') && (
-              <button>Save organization settings</button>
+              <button>{t("Save organization settings")}</button>
             )}
           </form>
           {bookingPolicy && (
@@ -359,7 +363,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
                 void saveBookingPolicy(event);
               }}
             >
-              <h3>Booking policy</h3>
+              <h3>{t("Booking policy")}</h3>
               <label>
                 <input
                   type="checkbox"
@@ -372,7 +376,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
                   }
                   disabled={!hasPermission(identity, 'organization.settings.manage')}
                 />{' '}
-                Allow customer cancellation
+                {t("Allow customer cancellation")}
               </label>
               <label>
                 <input
@@ -386,10 +390,10 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
                   }
                   disabled={!hasPermission(identity, 'organization.settings.manage')}
                 />{' '}
-                Allow customer rescheduling
+                {t("Allow customer rescheduling")}
               </label>
               <label>
-                Cancellation cutoff minutes (blank means no cutoff)
+                {t("Cancellation cutoff minutes (blank means no cutoff)")}
                 <input
                   type="number"
                   min="0"
@@ -405,7 +409,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
                 />
               </label>
               <label>
-                Reschedule cutoff minutes (blank means no cutoff)
+                {t("Reschedule cutoff minutes (blank means no cutoff)")}
                 <input
                   type="number"
                   min="0"
@@ -421,7 +425,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
                 />
               </label>
               <label>
-                Maximum customer reschedules (blank means unlimited)
+                {t("Maximum customer reschedules (blank means unlimited)")}
                 <input
                   type="number"
                   min="0"
@@ -437,7 +441,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
                 />
               </label>
               {hasPermission(identity, 'organization.settings.manage') && (
-                <button>Save booking policy</button>
+                <button>{t("Save booking policy")}</button>
               )}
             </form>
           )}
@@ -448,7 +452,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
           {section === 'Staff detail' && (
             <h3>
               {(report.staff as { displayName?: string } | undefined)?.displayName ??
-                'Staff operational detail'}
+                t('Staff operational detail')}
             </h3>
           )}
           <div className="report-grid">
@@ -460,7 +464,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
                 </article>
               ))}
           </div>
-          {section === 'Dashboard' && metrics.some(([key]) => !summaryKeys.has(key)) && <section className="dashboard-overview"><h3>Operational overview</h3><dl>{metrics.filter(([key]) => !summaryKeys.has(key)).map(([key, value]) => <div key={key}><dt>{label(key)}</dt><dd>{metricValue(value)}</dd></div>)}</dl></section>}
+          {section === 'Dashboard' && metrics.some(([key]) => !summaryKeys.has(key)) && <section className="dashboard-overview"><h3>{t("Operational overview")}</h3><dl>{metrics.filter(([key]) => !summaryKeys.has(key)).map(([key, value]) => <div key={key}><dt>{label(key)}</dt><dd>{metricValue(value)}</dd></div>)}</dl></section>}
           {rows.length ? (
             <div className="report-table-wrap">
               <table>
@@ -484,7 +488,7 @@ export function ReportingWorkspace({ identity, section }: { identity: Permission
             </div>
           ) : (
             section !== 'Dashboard' &&
-            section !== 'Staff detail' && <p>No records in this date range.</p>
+            section !== 'Staff detail' && <p>{t("No records in this date range.")}</p>
           )}
         </>
       )}

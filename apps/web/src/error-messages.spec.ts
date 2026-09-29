@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getUserFriendlyError } from './error-messages.js';
+import { setLanguage } from './i18n.js';
+
+beforeAll(async () => { await setLanguage('en'); });
+afterAll(async () => { await setLanguage('zh'); });
 
 describe('getUserFriendlyError', () => {
   it('maps stable codes without exposing backend details', () => {
@@ -24,5 +28,10 @@ describe('getUserFriendlyError', () => {
     ['INVITE_ALREADY_ACTIVE', 'An active invitation already exists for this staff member.'],
   ])('maps %s to a safe domain message', (code, expected) => {
     expect(getUserFriendlyError({ code })).toBe(expected);
+  });
+  it('uses a Chinese API message when Chinese is selected', async () => {
+    await setLanguage('zh');
+    expect(getUserFriendlyError({ code: 'STAFF_ASSIGNMENT_LIMIT', message: '每项预约服务只能分配一名员工。' })).toBe('每项预约服务只能分配一名员工。');
+    await setLanguage('en');
   });
 });

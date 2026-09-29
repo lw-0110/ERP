@@ -14,6 +14,7 @@ import { IsInt, IsOptional, Max, Min } from 'class-validator';
 import { prisma } from '../auth/prisma.js';
 import { tenantContext, type TenantRequest } from '../business/tenant-request.js';
 import { SessionGuard } from './session.guard.js';
+import { notificationText, resolveLanguage } from '../i18n/localize.js';
 
 class PageQuery {
   @IsOptional() @IsInt() @Min(1) @Max(10000) page = 1;
@@ -42,7 +43,8 @@ export class NotificationController {
       }),
       prisma.notification.count({ where }),
     ]);
-    return { items, total, page: query.page, limit: query.limit };
+    const language = resolveLanguage(req.headers['accept-language']);
+    return { items: items.map((item) => ({ ...item, ...notificationText(item.type, language) })), total, page: query.page, limit: query.limit };
   }
   @Get('unread-count') async unread(@Req() req: TenantRequest) {
     const { organizationId, userId } = tenantContext(req);
@@ -68,6 +70,6 @@ export class NotificationController {
       where: { id, organizationId, userId },
     });
     if (!notification) throw new NotFoundException('Notification not found.');
-    return notification;
+    return { ...notification, ...notificationText(notification.type, resolveLanguage(req.headers['accept-language'])) };
   }
 }

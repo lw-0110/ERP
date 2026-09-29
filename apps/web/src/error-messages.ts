@@ -1,3 +1,4 @@
+import { language, t } from './i18n.js';
 export type ApiError = { code?: string; message?: string; requestId?: string; details?: Record<string, string[]> };
 
 const messages: Record<string, string> = {
@@ -86,10 +87,15 @@ const messages: Record<string, string> = {
 export function getUserFriendlyError(error: unknown): string {
   if (error && typeof error === 'object') {
     const apiError = error as ApiError;
+    if (language() === 'zh') {
+      if (apiError.code === 'INVALID_EMAIL_OR_PASSWORD' || apiError.code === 'AUTH_INVALID_CREDENTIALS') return t('Email or password is incorrect.');
+      if (apiError.message && /[\u3400-\u9fff]/.test(apiError.message)) return apiError.message;
+      return t('Something went wrong. Please try again.');
+    }
     if (apiError.code && messages[apiError.code]) return messages[apiError.code];
     if (apiError.details) return messages.VALIDATION_INVALID_REQUEST;
   }
-  return 'Something went wrong. Please try again.';
+  return t('Something went wrong. Please try again.');
 }
 
 export async function readApiError(response: Response): Promise<ApiError> {

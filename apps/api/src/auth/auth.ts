@@ -1,8 +1,10 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { i18n, locales } from '@better-auth/i18n';
 import { prisma } from './prisma.js';
 
 export const auth = betterAuth({
+  plugins: [i18n({ translations: { zh: locales.zh }, defaultLocale: 'en', detection: ['header'] })],
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   emailAndPassword: { enabled: true },
   secret: process.env.BETTER_AUTH_SECRET,

@@ -4,6 +4,6 @@ function cell(value: unknown) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-export function csv(headers: readonly string[], rows: Record<string, unknown>[]) {
-  return `\uFEFF${[headers.map(cell).join(','), ...rows.map((row) => headers.map((header) => cell(row[header])).join(','))].join('\r\n')}\r\n`;
+export function csv(headers: readonly (string | { key: string; label: string })[], rows: Record<string, unknown>[]) {
+  return `\uFEFF${[headers.map((header) => cell(typeof header === 'string' ? header : header.label)).join(','), ...rows.map((row) => headers.map((header) => cell(row[typeof header === 'string' ? header : header.key])).join(','))].join('\r\n')}\r\n`;
 }

@@ -6,12 +6,13 @@ const identity = {
   membership: { id: 'navigation-membership' },
   role: { id: 'navigation-role', name: 'Configurable Role' },
   permissions: [
-    'booking.read.all', 'staff.read.all', 'attendance.read.all', 'payment.read.all',
+    'booking.read.all', 'staff.read.all', 'attendance.read.all', 'leave.read.all', 'payment.read.all',
     'audit.read',
   ],
 };
 
 test('shared navigation remains usable at every supported viewport', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('booking-language', 'en'));
   await page.route('**/identity/me', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(identity) }));
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Welcome/ })).toBeVisible();
@@ -65,4 +66,14 @@ test('shared navigation remains usable at every supported viewport', async ({ pa
   await expect(drawer.getByRole('button', { name: 'Manage Bookings' })).toBeVisible();
   await drawer.getByRole('button', { name: 'Manage Bookings' }).click();
   await expect(drawer).not.toBeVisible();
+});
+
+test('switching expanded sidebar groups opens the selected submenu', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('booking-language', 'en'));
+  await page.route('**/identity/me', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(identity) }));
+  await page.goto('/#/bookings');
+  const sidebar = page.getByRole('complementary', { name: 'Application sidebar', exact: true });
+  await expect(sidebar.getByRole('button', { name: 'Manage Bookings' })).toBeVisible();
+  await sidebar.getByRole('button', { name: 'Attendance & leave' }).click();
+  await expect(sidebar.getByRole('button', { name: 'Attendance', exact: true })).toBeVisible();
 });

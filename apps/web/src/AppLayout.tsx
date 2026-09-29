@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { t } from './i18n.js';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { pageLabel, type AppArea, type NavigationIcon, visibleNavigation } from './navigation.js';
 import { NotificationBell } from './NotificationBell.js';
 import type { PermissionContext } from './permissions.js';
+import { LanguageSwitch } from './LanguageSwitch.js';
 
 type Identity = PermissionContext & {
   user?: { name?: string; email?: string };
@@ -41,11 +43,12 @@ function Icon({ name }: { name: NavigationIcon | 'menu' | 'close' | 'collapse' |
 }
 
 function NavigationList({ identity, activeArea, collapsed = false, onNavigate }: { identity: Identity; activeArea: AppArea; collapsed?: boolean; onNavigate: (area: AppArea) => void }) {
-  const items = useMemo(() => visibleNavigation(identity), [identity]);
-  const [expanded, setExpanded] = useState<string>(() => items.find((group) => group.items.some((item) => item.id === activeArea))?.id ?? '');
+  const items = visibleNavigation(identity);
+  const activeGroupId = items.find((group) => group.items.some((item) => item.id === activeArea))?.id ?? '';
+  const [expanded, setExpanded] = useState<string>(activeGroupId);
   const [flyout, setFlyout] = useState<{ id: string; top: number } | null>(null);
   const flyoutRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { const group = items.find((candidate) => candidate.items.some((item) => item.id === activeArea)); if (group) setExpanded(group.id); }, [activeArea, items]);
+  useEffect(() => { if (activeGroupId) setExpanded(activeGroupId); }, [activeArea, activeGroupId]);
   useEffect(() => { if (!collapsed) setFlyout(null); }, [collapsed]);
   useEffect(() => {
     if (!flyout) return;
@@ -56,7 +59,7 @@ function NavigationList({ identity, activeArea, collapsed = false, onNavigate }:
     return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', escape); };
   }, [flyout]);
   const choose = (area: AppArea) => { setFlyout(null); onNavigate(area); };
-  return <><nav className="sidebar-navigation" aria-label="Main navigation">
+  return <><nav className="sidebar-navigation" aria-label={t("Main navigation")}>
     {items.map((group) => {
       const active = group.items.some((item) => item.id === activeArea);
       const single = group.items.length === 1;
@@ -71,9 +74,9 @@ function NavigationList({ identity, activeArea, collapsed = false, onNavigate }:
 function Profile({ identity, collapsed = false }: { identity: Identity; collapsed?: boolean }) {
   const displayName = identity.user?.name ?? identity.user?.email ?? 'User';
   const initials = displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-  return <div className="sidebar-profile" title={collapsed ? `${displayName} · ${identity.role?.name ?? 'No active role'}` : undefined}>
+  return <div className="sidebar-profile" title={collapsed ? `${displayName} · ${identity.role?.name ?? t('No active role')}` : undefined}>
     <span className="profile-avatar" aria-hidden="true">{initials || 'U'}</span>
-    <span className="profile-copy"><strong>{displayName}</strong><small>{identity.role?.name ?? 'No active role'}</small></span>
+    <span className="profile-copy"><strong>{displayName}</strong><small>{identity.role?.name ?? t('No active role')}</small></span>
   </div>;
 }
 
@@ -106,29 +109,30 @@ export function AppLayout({ identity, activeArea, collapsed, mobileOpen, onNavig
 
   const navigate = (area: AppArea) => { onNavigate(area); onMobileClose(); };
   return <div className={`app-layout${collapsed ? ' sidebar-collapsed' : ''}`}>
-    <aside className="desktop-sidebar" aria-label="Application sidebar">
-      <div className="brand"><span className="brand-mark" aria-hidden="true">B</span><span className="brand-copy">Booking Platform</span></div>
+    <aside className="desktop-sidebar" aria-label={t("Application sidebar")}>
+      <div className="brand"><span className="brand-mark" aria-hidden="true">{t("B")}</span><span className="brand-copy">{t("Booking Platform")}</span></div>
       <NavigationList identity={identity} activeArea={activeArea} collapsed={collapsed} onNavigate={onNavigate}/>
-      <div className="sidebar-footer"><Profile identity={identity} collapsed={collapsed}/><button type="button" className="sidebar-link logout-link" aria-label={collapsed ? 'Sign out' : undefined} data-tooltip={collapsed ? 'Sign out' : undefined} onClick={() => void onLogout()}><Icon name="logout"/><span>Sign out</span></button></div>
-      <button type="button" className="collapse-control" onClick={onToggleCollapsed} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed}><Icon name="collapse"/><span>{collapsed ? 'Expand' : 'Collapse sidebar'}</span></button>
+      <div className="sidebar-footer"><Profile identity={identity} collapsed={collapsed}/><button type="button" className="sidebar-link logout-link" aria-label={collapsed ? t('Sign out') : undefined} data-tooltip={collapsed ? t('Sign out') : undefined} onClick={() => void onLogout()}><Icon name="logout"/><span>{t("Sign out")}</span></button></div>
+      <button type="button" className="collapse-control" onClick={onToggleCollapsed} aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')} aria-expanded={!collapsed}><Icon name="collapse"/><span>{collapsed ? t('Expand') : t('Collapse sidebar')}</span></button>
     </aside>
 
     <header className="mobile-header">
-      <button ref={menuButtonRef} type="button" className="icon-button" onClick={onMobileOpen} aria-label="Open navigation menu" aria-expanded={mobileOpen} aria-controls="mobile-navigation"><Icon name="menu"/></button>
+      <button ref={menuButtonRef} type="button" className="icon-button" onClick={onMobileOpen} aria-label={t("Open navigation menu")} aria-expanded={mobileOpen} aria-controls="mobile-navigation"><Icon name="menu"/></button>
       <div><strong>{title}</strong><small>{identity.activeOrganization?.name}</small></div>
+      <LanguageSwitch />
       <NotificationBell />
-      <button type="button" className="profile-shortcut" onClick={() => onNavigate('profile')} aria-label="My Profile"><span className="profile-avatar" aria-hidden="true">{(identity.user?.name ?? identity.user?.email ?? 'U')[0]?.toUpperCase()}</span><span>My Profile</span></button>
+      <button type="button" className="profile-shortcut" onClick={() => onNavigate('profile')} aria-label={t("My Profile")}><span className="profile-avatar" aria-hidden="true">{(identity.user?.name ?? identity.user?.email ?? 'U')[0]?.toUpperCase()}</span><span>{t("My Profile")}</span></button>
     </header>
 
-    {mobileOpen && <button type="button" className="drawer-backdrop" aria-label="Close navigation menu" onClick={onMobileClose}/>} 
-    {mobileOpen && <div ref={drawerRef} role="dialog" aria-modal="true" aria-label="Navigation menu"><aside id="mobile-navigation" className="mobile-drawer is-open" aria-label="Mobile application sidebar">
-      <div className="drawer-header"><div className="brand"><span className="brand-mark" aria-hidden="true">B</span><span className="brand-copy">Booking Platform</span></div><button type="button" className="icon-button" onClick={onMobileClose} aria-label="Close navigation menu"><Icon name="close"/></button></div>
+    {mobileOpen && <button type="button" className="drawer-backdrop" aria-label={t("Close navigation menu")} onClick={onMobileClose}/>}
+    {mobileOpen && <div ref={drawerRef} role="dialog" aria-modal="true" aria-label={t("Navigation menu")}><aside id="mobile-navigation" className="mobile-drawer is-open" aria-label={t("Mobile application sidebar")}>
+      <div className="drawer-header"><div className="brand"><span className="brand-mark" aria-hidden="true">{t("B")}</span><span className="brand-copy">{t("Booking Platform")}</span></div><button type="button" className="icon-button" onClick={onMobileClose} aria-label={t("Close navigation menu")}><Icon name="close"/></button></div>
       <NavigationList identity={identity} activeArea={activeArea} onNavigate={navigate}/>
-      <div className="sidebar-footer"><Profile identity={identity}/><button type="button" className="sidebar-link logout-link" onClick={() => void onLogout()}><Icon name="logout"/><span>Sign out</span></button></div>
+      <div className="sidebar-footer"><Profile identity={identity}/><button type="button" className="sidebar-link logout-link" onClick={() => void onLogout()}><Icon name="logout"/><span>{t("Sign out")}</span></button></div>
     </aside></div>}
 
     <section className="content-column">
-      <header className="content-header"><div><p>{identity.activeOrganization?.name}</p><h1>{title}</h1></div><div className="header-actions"><NotificationBell /><button type="button" className="profile-shortcut" onClick={() => onNavigate('profile')} aria-label="My Profile"><span className="profile-avatar" aria-hidden="true">{(identity.user?.name ?? identity.user?.email ?? 'U')[0]?.toUpperCase()}</span><span>{identity.user?.name ?? identity.user?.email ?? 'My Profile'}</span></button></div></header>
+      <header className="content-header"><div><p>{identity.activeOrganization?.name}</p><h1>{title}</h1></div><div className="header-actions"><LanguageSwitch /><NotificationBell /><button type="button" className="profile-shortcut" onClick={() => onNavigate('profile')} aria-label={t("My Profile")}><span className="profile-avatar" aria-hidden="true">{(identity.user?.name ?? identity.user?.email ?? 'U')[0]?.toUpperCase()}</span><span>{identity.user?.name ?? identity.user?.email ?? t('My Profile')}</span></button></div></header>
       <main className="app-content">{children}</main>
     </section>
   </div>;

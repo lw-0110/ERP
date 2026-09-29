@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pageLabel, visibleNavigation } from './navigation.js';
+import { setLanguage } from './i18n.js';
 
 const leaves = (permissions: string[]) => visibleNavigation({ permissions }).flatMap((group) => group.items.map((item) => item.id));
 
@@ -32,8 +33,11 @@ describe('permission-driven navigation', () => {
     expect(leaves(['service.read'])).toContain('services');
   });
 
-  it('requires every permission for payment management and labels the dashboard', () => {
+  it('requires every permission for payment management and translates the dashboard label', async () => {
     expect(leaves(['payment.read.all'])).not.toContain('payments');
+    expect(pageLabel('dashboard')).toBe('仪表板');
+    await setLanguage('en');
     expect(pageLabel('dashboard')).toBe('Dashboard');
+    await setLanguage('zh');
   });
 });

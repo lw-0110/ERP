@@ -1,6 +1,6 @@
 {
-  "name": "Booking Management Platform",
-  "short_name": "Bookings",
+  "name": "预约管理系统",
+  "short_name": "预约",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f9fc",

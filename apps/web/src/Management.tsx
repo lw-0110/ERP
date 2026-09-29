@@ -1,3 +1,5 @@
+import { apiFetch } from './api-fetch.js';
+import { t, locale, translateStatus } from './i18n.js';
 import { formatMoney } from './money.js';
 import { type FormEvent, useEffect, useState } from 'react';
 import { hasPermission, type PermissionContext } from './permissions.js';
@@ -41,7 +43,7 @@ export function Management({ identity, section }: { identity: PermissionContext;
     setLoading(true);
     try {
       const search = section === 'staff' && requestedSearch.trim() ? `&search=${encodeURIComponent(requestedSearch.trim())}` : '';
-      const response = await fetch(`${api}/${section}?page=${requestedPage}${search}`, { credentials: 'include' });
+      const response = await apiFetch(`${api}/${section}?page=${requestedPage}${search}`, { credentials: 'include' });
       if (!response.ok) throw new Error(getUserFriendlyError(await readApiError(response)));
       const result = await response.json();
       setItems(result.items ?? []);
@@ -52,7 +54,7 @@ export function Management({ identity, section }: { identity: PermissionContext;
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, [section, page, staffSearch]);
-  useEffect(() => { if (section !== 'staff' || !hasPermission(identity, 'role.read')) return; void fetch(`${api}/roles`, { credentials: 'include' }).then(async (response) => { if (!response.ok) throw new Error(getUserFriendlyError(await readApiError(response))); setRoles((await response.json() as Role[]).filter((role) => role.status === 'ACTIVE')); }).catch((cause: Error) => setError(cause.message)); }, [section, identity]);
+  useEffect(() => { if (section !== 'staff' || !hasPermission(identity, 'role.read')) return; void apiFetch(`${api}/roles`, { credentials: 'include' }).then(async (response) => { if (!response.ok) throw new Error(getUserFriendlyError(await readApiError(response))); setRoles((await response.json() as Role[]).filter((role) => role.status === 'ACTIVE')); }).catch((cause: Error) => setError(cause.message)); }, [section, identity]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,7 +71,7 @@ export function Management({ identity, section }: { identity: PermissionContext;
         : { name: data.get('name'), durationMinutes: Number(data.get('durationMinutes')), priceMinor: Math.round(Number(data.get('price')) * 100), ...(hasPermission(identity, 'service.commission.manage') ? { commissionPercentage: Number(data.get('commissionPercentage')) } : {}), currency: String(data.get('currency')).toUpperCase(), requiredStaffCount: Number(data.get('requiredStaffCount')), bufferBeforeMinutes: editing?.bufferBeforeMinutes ?? 0, bufferAfterMinutes: editing?.bufferAfterMinutes ?? 0, ...(editing ? { categoryId: editing.categoryId ?? undefined, description: editing.description ?? undefined, requiredSkills: editing.requiredSkills?.map((item) => ({ id: item.skillId, requiredCount: item.requiredCount })), requiredResourceTypes: editing.requiredResourceTypes?.map((item) => ({ id: item.resourceTypeId, requiredCount: item.requiredCount })) } : {}) };
     try {
       const path = inviteAfterSave ? 'staff/create-and-invite' : `${section}${editing ? `/${editing.id}` : ''}`;
-      const response = await fetch(`${api}/${path}`, { method: editing ? 'PATCH' : 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(inviteAfterSave ? { ...body, roleId } : body) });
+      const response = await apiFetch(`${api}/${path}`, { method: editing ? 'PATCH' : 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(inviteAfterSave ? { ...body, roleId } : body) });
       if (!response.ok) throw new Error(getUserFriendlyError(await readApiError(response)));
       const result = await response.json() as Item & { staff?: Item; invitation?: Invitation; invitationUrl?: string };
       if (inviteAfterSave && (!result.staff || !result.invitation?.expiresAt || !result.invitationUrl)) throw new Error('Invitation was created, but its one-time link was not returned. Contact your administrator before retrying.');
@@ -80,10 +82,10 @@ export function Management({ identity, section }: { identity: PermissionContext;
         setSelected(saved);
         setEditing(undefined);
         if (editing?.userId && editing.membershipId && roleId && roleId !== editing.roleId) {
-          const changed = await fetch(`${api}/memberships/${editing.membershipId}/role`, { method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roleId }) });
+          const changed = await apiFetch(`${api}/memberships/${editing.membershipId}/role`, { method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roleId }) });
           if (!changed.ok) throw new Error(getUserFriendlyError(await readApiError(changed)));
         }
-        if (inviteAfterSave && result.invitationUrl && result.invitation) { setCopyFeedback(''); setInvitationResult({ staffName: saved.displayName ?? '', roleName: roles.find((role) => role.id === roleId)?.name ?? 'Selected role', invitationUrl: result.invitationUrl, expiresAt: result.invitation.expiresAt, newStaff: true }); }
+        if (inviteAfterSave && result.invitationUrl && result.invitation) { setCopyFeedback(''); setInvitationResult({ staffName: saved.displayName ?? '', roleName: roles.find((role) => role.id === roleId)?.name ?? t('Selected role'), invitationUrl: result.invitationUrl, expiresAt: result.invitation.expiresAt, newStaff: true }); }
       }
       setEditing(undefined);
       if (!inviteAfterSave) setMessage(section === 'staff' && !editing ? 'Staff profile saved. No login account has been created.' : `${section === 'customers' ? 'Customer' : section === 'staff' ? 'Staff member' : 'Service'} saved.`);
@@ -92,23 +94,23 @@ export function Management({ identity, section }: { identity: PermissionContext;
     finally { setSaving(false); }
   }
   async function loadInvitations(staffId: string) {
-    const response = await fetch(`${api}/staff/${staffId}/invitations`, { credentials: 'include' });
+    const response = await apiFetch(`${api}/staff/${staffId}/invitations`, { credentials: 'include' });
     if (response.ok) setInvitations(await response.json());
   }
   async function createInvitation(staffId = selected?.id, roleId = selectedRoleId) {
     if (!staffId || !roleId) { setError('Select a role before creating the staff account invitation.'); return; }
     setError('');
-    const response = await fetch(`${api}/staff/${staffId}/invitations`, { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roleId }) });
+    const response = await apiFetch(`${api}/staff/${staffId}/invitations`, { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roleId }) });
     if (!response.ok) throw new Error(getUserFriendlyError(await readApiError(response)));
     const result = await response.json();
     if (!result.invitationUrl || !result.invitation?.expiresAt) throw new Error('Invitation was created, but its one-time link was not returned. Contact your administrator before retrying.');
     setCopyFeedback('');
-    setInvitationResult({ staffName: selected?.displayName ?? '', roleName: roles.find((role) => role.id === roleId)?.name ?? 'Selected role', invitationUrl: result.invitationUrl, expiresAt: result.invitation.expiresAt, newStaff: false });
+    setInvitationResult({ staffName: selected?.displayName ?? '', roleName: roles.find((role) => role.id === roleId)?.name ?? t('Selected role'), invitationUrl: result.invitationUrl, expiresAt: result.invitation.expiresAt, newStaff: false });
     await loadInvitations(staffId);
   }
   async function revokeInvitation(id: string) {
-    if (!selected || !window.confirm('Revoke this unused invitation?')) return;
-    const response = await fetch(`${api}/staff/${selected.id}/invitations/${id}/revoke`, { method: 'PATCH', credentials: 'include' });
+    if (!selected || !window.confirm(t('Revoke this unused invitation?'))) return;
+    const response = await apiFetch(`${api}/staff/${selected.id}/invitations/${id}/revoke`, { method: 'PATCH', credentials: 'include' });
     if (!response.ok) { setError('Unable to revoke invitation.'); return; }
     await loadInvitations(selected.id);
     await load();
@@ -116,13 +118,13 @@ export function Management({ identity, section }: { identity: PermissionContext;
   async function changeStatus() {
     if (!selected) return;
     const nextStatus = selected.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    if (!window.confirm(`${nextStatus === 'INACTIVE' ? 'Deactivate' : 'Reactivate'} ${selected.displayName ?? selected.name ?? 'this record'}? Historical records will remain available.`)) return;
+    if (!window.confirm(t('{{action}} {{name}}? Historical records will remain available.', { action: t(nextStatus === 'INACTIVE' ? 'Deactivate' : 'Reactivate'), name: selected.displayName ?? selected.name ?? t('this record') }))) return;
     setError('');
     try {
-      const response = await fetch(`${api}/${section}/${selected.id}/status`, { method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) });
+      const response = await apiFetch(`${api}/${section}/${selected.id}/status`, { method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) });
       if (!response.ok) throw new Error(getUserFriendlyError(await readApiError(response)));
       setSelected(await response.json());
-      setMessage(`${current.title.slice(0, -1)} ${nextStatus === 'INACTIVE' ? 'deactivated' : 'reactivated'}.`);
+      setMessage(t('Record status updated.'));
       await load();
     } catch (cause) { setError((cause as Error).message); }
   }
@@ -138,7 +140,7 @@ export function Management({ identity, section }: { identity: PermissionContext;
     { label: 'No.', render: rowNumber },
     { label: 'Name', render: (item: Item) => item.displayName ?? '—' },
     { label: 'Email', render: (item: Item) => item.email ?? '—' },
-    { label: 'Role', render: (item: Item) => item.roleName ?? 'Not assigned' },
+    { label: 'Role', render: (item: Item) => item.roleName ?? t('Not assigned') },
     { label: 'Account Status', render: (item: Item) => item.accountStatus ?? 'No Account' },
     { label: 'Staff Status', render: (item: Item) => item.status ?? '—' },
   ] : [
@@ -150,35 +152,35 @@ export function Management({ identity, section }: { identity: PermissionContext;
     { label: 'Status', render: (item: Item) => item.status ?? '—' },
   ];
   return <section className="panel management-page">
-    <PageHeader title={current.title} actions={hasPermission(identity, current.create) && <button type="button" onClick={() => { setError(''); setSelectedRoleId(''); setEditing(null); }}>New</button>} />
-    {error && editing === undefined && <p role="alert" className="error">{error}</p>}{message && <p role="status">{message}</p>}
-    {section === 'staff' && <label className="filter-field">Find staff by name, email or employee code<input type="search" value={staffSearch} onChange={(event) => { setStaffSearch(event.target.value); setPage(1); }} placeholder="Search staff…" /></label>}
-    <DataTable columns={columns} rows={items} loading={loading} selectedId={selected?.id} onSelect={(item) => { setSelected(item); setSelectedRoleId(item.roleId ?? ''); setInvitations([]); if (section === 'staff' && hasPermission(identity, 'staff.invite')) void loadInvitations(item.id); }} mobileSummary={(item) => <><strong>{item.displayName ?? item.name}</strong><span>{section === 'services' ? `${item.durationMinutes} min · ${item.priceMinor} ${item.currency}` : item.phone}</span><small>{item.status}</small></>} empty={`No ${current.title.toLowerCase()} yet.`} />
-    {total > pageSize && <nav className="pagination" aria-label={`${current.title} pages`}><button type="button" className="secondary" disabled={page === 1} onClick={() => { setSelected(undefined); setPage(page - 1); }}>Previous</button><span>Page {page} of {Math.ceil(total / pageSize)}</span><button type="button" className="secondary" disabled={page * pageSize >= total} onClick={() => { setSelected(undefined); setPage(page + 1); }}>Next</button></nav>}
-    <RecordDrawer title={section === 'customers' ? 'Customer Details' : section === 'staff' ? 'Staff Details' : 'Service Details'} open={Boolean(selected)} onClose={() => setSelected(undefined)} actions={selected && <>
-      {hasPermission(identity, current.update) && <button type="button" onClick={() => { setError(''); setSelectedRoleId(selected.roleId ?? ''); setEditing(selected); }}>Edit</button>}
-      {selected.status && (section === 'services' ? hasPermission(identity, 'service.disable') : hasPermission(identity, current.update)) && <button type="button" className="secondary" onClick={() => void changeStatus()}>{selected.status === 'ACTIVE' ? 'Deactivate' : 'Reactivate'}</button>}
-      {section === 'staff' && !selected.userId && selected.accountStatus !== 'Invitation Active' && selected.status === 'ACTIVE' && hasPermission(identity, 'staff.invite') && hasPermission(identity, 'role.read') && hasPermission(identity, 'role.update') && <button type="button" className="secondary" onClick={() => setInviteFormOpen(true)}>Create &amp; Invite Account</button>}
+    <PageHeader title={current.title} actions={hasPermission(identity, current.create) && <button type="button" onClick={() => { setError(''); setSelectedRoleId(''); setEditing(null); }}>{t("New")}</button>} />
+    {error && editing === undefined && <p role="alert" className="error">{t(error)}</p>}{message && <p role="status">{t(message)}</p>}
+    {section === 'staff' && <label className="filter-field">{t("Find staff by name, email or employee code")}<input type="search" value={staffSearch} onChange={(event) => { setStaffSearch(event.target.value); setPage(1); }} placeholder={t("Search staff…")} /></label>}
+    <DataTable columns={columns} rows={items} loading={loading} selectedId={selected?.id} onSelect={(item) => { setSelected(item); setSelectedRoleId(item.roleId ?? ''); setInvitations([]); if (section === 'staff' && hasPermission(identity, 'staff.invite')) void loadInvitations(item.id); }} mobileSummary={(item) => <><strong>{item.displayName ?? item.name}</strong><span>{section === 'services' ? t("{{duration}} min · {{amount}}", { duration: item.durationMinutes ?? 0, amount: formatMoney(item.priceMinor ?? 0, item.currency ?? "MYR") }) : item.phone}</span><small>{translateStatus(item.status)}</small></>} empty={t(section === 'staff' ? 'No staff yet.' : section === 'services' ? 'No services yet.' : 'No customers yet.')} />
+    {total > pageSize && <nav className="pagination" aria-label={t('{{type}} pages', { type: t(current.title) })}><button type="button" className="secondary" disabled={page === 1} onClick={() => { setSelected(undefined); setPage(page - 1); }}>{t("Previous")}</button><span>{t("Page")} {page} {t("of")} {Math.ceil(total / pageSize)}</span><button type="button" className="secondary" disabled={page * pageSize >= total} onClick={() => { setSelected(undefined); setPage(page + 1); }}>{t("Next")}</button></nav>}
+    <RecordDrawer title={section === 'customers' ? t('Customer Details') : section === 'staff' ? t('Staff Details') : t('Service Details')} open={Boolean(selected)} onClose={() => setSelected(undefined)} actions={selected && <>
+      {hasPermission(identity, current.update) && <button type="button" onClick={() => { setError(''); setSelectedRoleId(selected.roleId ?? ''); setEditing(selected); }}>{t("Edit")}</button>}
+      {selected.status && (section === 'services' ? hasPermission(identity, 'service.disable') : hasPermission(identity, current.update)) && <button type="button" className="secondary" onClick={() => void changeStatus()}>{selected.status === 'ACTIVE' ? t('Deactivate') : t('Reactivate')}</button>}
+      {section === 'staff' && !selected.userId && selected.accountStatus !== 'Invitation Active' && selected.status === 'ACTIVE' && hasPermission(identity, 'staff.invite') && hasPermission(identity, 'role.read') && hasPermission(identity, 'role.update') && <button type="button" className="secondary" onClick={() => setInviteFormOpen(true)}>{t("Create & Invite Account")}</button>}
     </>}>
-      {selected && <><RecordSection title={section === 'customers' ? 'Customer' : section === 'staff' ? 'Staff' : 'Service'}>
-        <RecordField label="Name">{selected.displayName ?? selected.name}</RecordField>
-        {section === 'staff' && <RecordField label="Employee code">{selected.employeeCode}</RecordField>}
-        {section === 'services' ? <><RecordField label="Category">{selected.category?.name ?? '—'}</RecordField><RecordField label="Duration">{selected.durationMinutes} min</RecordField><RecordField label="Price">{formatMoney(selected.priceMinor ?? 0, selected.currency ?? 'MYR')}</RecordField><RecordField label="Commission">{Number(selected.commissionPercentage ?? 0)}%</RecordField><RecordField label="Required staff">{selected.requiredStaffCount}</RecordField>{selected.description && <RecordField label="Description">{selected.description}</RecordField>}</> : <><RecordField label="Phone">{selected.phone}</RecordField><RecordField label="Email">{selected.email}</RecordField></>}
-        <RecordField label="Status">{selected.status}</RecordField>
-      </RecordSection>{section === 'staff' && <RecordSection title="Account"><RecordField label="Account status">{selected.accountStatus ?? 'No Account'}</RecordField><RecordField label="Role">{selected.roleName ?? 'Not assigned'}</RecordField>{selected.userId ? <p>This staff profile is linked to an account. Use Edit to change its role.</p> : <><h4>Invitation history</h4>{invitations.length ? <ul>{invitations.map((invitation) => <li key={invitation.id}>{invitation.status} · {invitation.role?.name ?? 'Role unavailable'} · expires {new Date(invitation.expiresAt).toLocaleString()} {invitation.status === 'ACTIVE' && hasPermission(identity, 'staff.invite') && <button type="button" onClick={() => void revokeInvitation(invitation.id)}>Revoke</button>}</li>)}</ul> : <p>No invitations.</p>}</>}</RecordSection>}</>}
+      {selected && <><RecordSection title={section === 'customers' ? t('Customer') : section === 'staff' ? t('Staff') : t('Service')}>
+        <RecordField label={t("Name")}>{selected.displayName ?? selected.name}</RecordField>
+        {section === 'staff' && <RecordField label={t("Employee code")}>{selected.employeeCode}</RecordField>}
+        {section === 'services' ? <><RecordField label={t("Category")}>{selected.category?.name ?? '—'}</RecordField><RecordField label={t("Duration")}>{selected.durationMinutes} {t("min")}</RecordField><RecordField label={t("Price")}>{formatMoney(selected.priceMinor ?? 0, selected.currency ?? 'MYR')}</RecordField><RecordField label={t("Commission")}>{Number(selected.commissionPercentage ?? 0)}%</RecordField><RecordField label={t("Required staff")}>{selected.requiredStaffCount}</RecordField>{selected.description && <RecordField label={t("Description")}>{selected.description}</RecordField>}</> : <><RecordField label={t("Phone")}>{selected.phone}</RecordField><RecordField label={t("Email")}>{selected.email}</RecordField></>}
+        <RecordField label={t("Status")}>{translateStatus(selected.status)}</RecordField>
+      </RecordSection>{section === 'staff' && <RecordSection title={t("Account")}><RecordField label={t("Account status")}>{selected.accountStatus ?? t('No Account')}</RecordField><RecordField label={t("Role")}>{selected.roleName ?? t('Not assigned')}</RecordField>{selected.userId ? <p>{t("This staff profile is linked to an account. Use Edit to change its role.")}</p> : <><h4>{t("Invitation history")}</h4>{invitations.length ? <ul>{invitations.map((invitation) => <li key={invitation.id}>{translateStatus(invitation.status)} · {invitation.role?.name ?? t('Role unavailable')} {t("· expires")} {new Date(invitation.expiresAt).toLocaleString(locale())} {invitation.status === 'ACTIVE' && hasPermission(identity, 'staff.invite') && <button type="button" onClick={() => void revokeInvitation(invitation.id)}>{t("Revoke")}</button>}</li>)}</ul> : <p>{t("No invitations.")}</p>}</>}</RecordSection>}</>}
     </RecordDrawer>
-    <FormDialog title="Create & Invite Account" open={inviteFormOpen} onClose={() => setInviteFormOpen(false)}><div className="stack"><p>Choose an active role for this staff account invitation.</p><label>Role<select value={selectedRoleId} onChange={(event) => setSelectedRoleId(event.target.value)}><option value="">Select an active role</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label><div className="dialog-actions"><button type="button" className="secondary" onClick={() => setInviteFormOpen(false)}>Cancel</button><button type="button" disabled={!selectedRoleId || selected?.status !== 'ACTIVE'} onClick={() => { void createInvitation().then(() => { setInviteFormOpen(false); void load(); }).catch((cause: Error) => setError(cause.message)); }}>Create &amp; Invite Account</button></div></div></FormDialog>
-    <FormDialog title={`${editing ? 'Edit' : 'New'} ${current.title === 'Staff' ? 'staff member' : current.title.slice(0, -1).toLowerCase()}`} open={editing !== undefined} onClose={() => setEditing(undefined)}>
+    <FormDialog title={t("Create & Invite Account")} open={inviteFormOpen} onClose={() => setInviteFormOpen(false)}><div className="stack"><p>{t("Choose an active role for this staff account invitation.")}</p><label>{t("Role")}<select value={selectedRoleId} onChange={(event) => setSelectedRoleId(event.target.value)}><option value="">{t("Select an active role")}</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label><div className="dialog-actions"><button type="button" className="secondary" onClick={() => setInviteFormOpen(false)}>{t("Cancel")}</button><button type="button" disabled={!selectedRoleId || selected?.status !== 'ACTIVE'} onClick={() => { void createInvitation().then(() => { setInviteFormOpen(false); void load(); }).catch((cause: Error) => setError(cause.message)); }}>{t("Create & Invite Account")}</button></div></div></FormDialog>
+    <FormDialog title={t('{{action}} {{type}}', { action: t(editing ? t('Edit') : t('New')), type: t(current.title === 'Staff' ? t('staff member') : current.title.slice(0, -1)) })} open={editing !== undefined} onClose={() => setEditing(undefined)}>
       <form key={editing?.id ?? 'new'} className="stack" onSubmit={(event) => void save(event)} onInvalid={section === 'staff' ? () => setError('Complete Employee code, Display name, a valid Email, and Phone before saving or inviting.') : undefined}>
-        {error && editing !== undefined && <p role="alert" className="error">{error}</p>}
-        {section === 'customers' && <><label>First name<input name="firstName" defaultValue={editing?.firstName ?? ''} required /></label><label>Last name<input name="lastName" defaultValue={editing?.lastName ?? ''} required /></label><label>Display name<input name="displayName" defaultValue={editing?.displayName ?? ''} required /></label><label>Email<input name="email" type="email" defaultValue={editing?.email ?? ''} required /></label><label>Phone<input name="phone" defaultValue={editing?.phone ?? ''} required /></label></>}
-        {section === 'staff' && <><label>Employee code<input name="employeeCode" defaultValue={editing?.employeeCode ?? ''} required /></label><label>Display name<input name="displayName" defaultValue={editing?.displayName ?? ''} required /></label><label>Email<input name="email" type="email" defaultValue={editing?.email ?? ''} required /></label><label>Phone<input name="phone" defaultValue={editing?.phone ?? ''} required /></label>{hasPermission(identity, 'role.read') && <label>Role<select name="roleId" value={selectedRoleId} disabled={Boolean(editing?.userId && !hasPermission(identity, 'role.update')) || editing?.accountStatus === 'Invitation Active'} onChange={(event) => setSelectedRoleId(event.target.value)}><option value="">Select an active role</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>}{editing === null && !selectedRoleId && <p>Select a role to create a staff login invitation.</p>}</>}
-        {section === 'services' && <><label>Service name<input name="name" defaultValue={editing?.name ?? ''} required /></label><label>Duration minutes<input name="durationMinutes" type="number" min="1" defaultValue={editing?.durationMinutes ?? 60} required /></label><label>Price<input name="price" type="number" min="0" step="0.01" defaultValue={((editing?.priceMinor ?? 0) / 100).toFixed(2)} required /></label><label>Commission percentage<input name="commissionPercentage" type="number" min="0" max="100" step="0.01" defaultValue={Number(editing?.commissionPercentage ?? 0)} disabled={!hasPermission(identity, 'service.commission.manage')} required /></label><label>Currency<input name="currency" defaultValue={editing?.currency ?? 'MYR'} minLength={3} maxLength={3} required /></label><label>Required staff<input name="requiredStaffCount" type="number" min="1" defaultValue={editing?.requiredStaffCount ?? 1} required /></label></>}
-        <div className="dialog-actions staff-form-actions"><button type="button" className="secondary" onClick={() => setEditing(undefined)}>Cancel</button>{section === 'staff' && editing === null && hasPermission(identity, 'staff.invite') && hasPermission(identity, 'role.update') && hasPermission(identity, 'role.read') && <button type="submit" className="staff-create-invite" data-invite="true" disabled={saving || !selectedRoleId}>Create Staff &amp; Invite</button>}<button className={section === 'staff' && editing === null ? 'secondary staff-profile-only' : ''} disabled={saving}>{saving ? 'Saving…' : section === 'staff' && editing === null ? 'Save Profile Only' : 'Save'}</button></div>
+        {error && editing !== undefined && <p role="alert" className="error">{t(error)}</p>}
+        {section === 'customers' && <><label>{t("First name")}<input name="firstName" defaultValue={editing?.firstName ?? ''} required /></label><label>{t("Last name")}<input name="lastName" defaultValue={editing?.lastName ?? ''} required /></label><label>{t("Display name")}<input name="displayName" defaultValue={editing?.displayName ?? ''} required /></label><label>{t("Email")}<input name="email" type="email" defaultValue={editing?.email ?? ''} required /></label><label>{t("Phone")}<input name="phone" defaultValue={editing?.phone ?? ''} required /></label></>}
+        {section === 'staff' && <><label>{t("Employee code")}<input name="employeeCode" defaultValue={editing?.employeeCode ?? ''} required /></label><label>{t("Display name")}<input name="displayName" defaultValue={editing?.displayName ?? ''} required /></label><label>{t("Email")}<input name="email" type="email" defaultValue={editing?.email ?? ''} required /></label><label>{t("Phone")}<input name="phone" defaultValue={editing?.phone ?? ''} required /></label>{hasPermission(identity, 'role.read') && <label>{t("Role")}<select name="roleId" value={selectedRoleId} disabled={Boolean(editing?.userId && !hasPermission(identity, 'role.update')) || editing?.accountStatus === 'Invitation Active'} onChange={(event) => setSelectedRoleId(event.target.value)}><option value="">{t("Select an active role")}</option>{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>}{editing === null && !selectedRoleId && <p>{t("Select a role to create a staff login invitation.")}</p>}</>}
+        {section === 'services' && <><label>{t("Service name")}<input name="name" defaultValue={editing?.name ?? ''} required /></label><label>{t("Duration minutes")}<input name="durationMinutes" type="number" min="1" defaultValue={editing?.durationMinutes ?? 60} required /></label><label>{t("Price")}<input name="price" type="number" min="0" step="0.01" defaultValue={((editing?.priceMinor ?? 0) / 100).toFixed(2)} required /></label><label>{t("Commission percentage")}<input name="commissionPercentage" type="number" min="0" max="100" step="0.01" defaultValue={Number(editing?.commissionPercentage ?? 0)} disabled={!hasPermission(identity, 'service.commission.manage')} required /></label><label>{t("Currency")}<input name="currency" defaultValue={editing?.currency ?? 'MYR'} minLength={3} maxLength={3} required /></label><label>{t("Required staff")}<input name="requiredStaffCount" type="number" min="1" defaultValue={editing?.requiredStaffCount ?? 1} required /></label></>}
+        <div className="dialog-actions staff-form-actions"><button type="button" className="secondary" onClick={() => setEditing(undefined)}>{t("Cancel")}</button>{section === 'staff' && editing === null && hasPermission(identity, 'staff.invite') && hasPermission(identity, 'role.update') && hasPermission(identity, 'role.read') && <button type="submit" className="staff-create-invite" data-invite="true" disabled={saving || !selectedRoleId}>{t("Create Staff & Invite")}</button>}<button className={section === 'staff' && editing === null ? 'secondary staff-profile-only' : ''} disabled={saving}>{saving ? t('Saving…') : section === 'staff' && editing === null ? t('Save Profile Only') : t('Save')}</button></div>
       </form>
     </FormDialog>
-    <FormDialog title={invitationResult?.newStaff ? 'Staff created and invitation generated' : 'Invitation generated'} open={Boolean(invitationResult)} onClose={() => { setInvitationResult(undefined); void load(); }}>
-      {invitationResult && <div className="stack"><p><strong>Copy this link now.</strong> It is shown only once and cannot be retrieved after Done or refresh.</p><p>Staff: {invitationResult.staffName}<br />Role: {invitationResult.roleName}<br />Invitation expires: {new Date(invitationResult.expiresAt).toLocaleString()}</p><label>Invitation link<input aria-label="Staff invitation URL" readOnly value={invitationResult.invitationUrl} /></label>{copyFeedback && <p role="status">{copyFeedback}</p>}<div className="dialog-actions"><button type="button" className="secondary" onClick={() => { void navigator.clipboard.writeText(invitationResult.invitationUrl).then(() => setCopyFeedback('Invitation link copied.')).catch(() => setCopyFeedback('Unable to copy automatically. Select and copy the link above.')); }}>Copy Link</button><button type="button" onClick={() => { setInvitationResult(undefined); void load(); }}>Done</button></div></div>}
+    <FormDialog title={invitationResult?.newStaff ? t('Staff created and invitation generated') : t('Invitation generated')} open={Boolean(invitationResult)} onClose={() => { setInvitationResult(undefined); void load(); }}>
+      {invitationResult && <div className="stack"><p><strong>{t("Copy this link now.")}</strong> {t("It is shown only once and cannot be retrieved after Done or refresh.")}</p><p>{t("Staff:")} {invitationResult.staffName}<br />{t("Role:")} {invitationResult.roleName}<br />{t("Invitation expires:")} {new Date(invitationResult.expiresAt).toLocaleString(locale())}</p><label>{t("Invitation link")}<input aria-label={t("Staff invitation URL")} readOnly value={invitationResult.invitationUrl} /></label>{copyFeedback && <p role="status">{t(copyFeedback)}</p>}<div className="dialog-actions"><button type="button" className="secondary" onClick={() => { void navigator.clipboard.writeText(invitationResult.invitationUrl).then(() => setCopyFeedback('Invitation link copied.')).catch(() => setCopyFeedback('Unable to copy automatically. Select and copy the link above.')); }}>{t("Copy Link")}</button><button type="button" onClick={() => { setInvitationResult(undefined); void load(); }}>{t("Done")}</button></div></div>}
     </FormDialog>
   </section>;
 }

@@ -1,3 +1,5 @@
+import { apiFetch } from './api-fetch.js';
+import { t, locale, translateStatus } from './i18n.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { getUserFriendlyError, readApiError } from './error-messages.js';
 import { hasPermission, type PermissionContext } from './permissions.js';
@@ -7,7 +9,7 @@ const api = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 type Customer = { id: string; displayName: string; email: string; phone: string; status: string; completedVisitCount: number; lastCompletedVisit: string | null };
 type Service = { id: string; name: string; durationMinutes: number };
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${api}${path}`, { credentials: 'include', ...init, headers: { ...(init?.body ? { 'content-type': 'application/json' } : {}), ...init?.headers } });
+  const response = await apiFetch(`${api}${path}`, { credentials: 'include', ...init, headers: { ...(init?.body ? { 'content-type': 'application/json' } : {}), ...init?.headers } });
   if (!response.ok) throw new Error(getUserFriendlyError(await readApiError(response)));
   return response.json() as Promise<T>;
 }
@@ -72,18 +74,18 @@ export function ReceptionistBooking({ identity }: { identity: PermissionContext 
   }
 
   return <section className="panel reception-booking">
-    <h2>New Booking</h2>
-    {error && <p role="alert" className="error">{error}</p>}
-    {message && <p role="status">{message}</p>}
-    <div className="reception-step"><span>1</span><h3>Customer</h3></div>
-    {customer ? <div className="reception-selected"><strong>{customer.displayName}</strong><span>{customer.phone} · {customer.email}</span><button type="button" className="secondary" onClick={() => { setCustomer(undefined); setQuery(''); setCreating(false); }}>Change customer</button></div> : <>
-      <label className="reception-search">Search phone, customer name or email<input type="search" autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setResults([]); setSearching(Boolean(event.target.value.trim())); setPendingCustomer(undefined); }} placeholder="Phone number, name or email" /></label>
-      {searching && <p role="status">Searching customers…</p>}
-      {query.trim() && !searching && !results.length && !error && <p>No customer found.</p>}
-      {!!results.length && <ul className="reception-results">{results.map((item) => <li key={item.id}><div><strong>{item.displayName}</strong><span>{item.phone} · {item.email}</span><small>{item.status} · Total visits: {item.completedVisitCount} · Last visit: {item.lastCompletedVisit ? new Date(item.lastCompletedVisit).toLocaleDateString() : '—'}</small></div><button type="button" disabled={item.status !== 'ACTIVE'} onClick={() => { setCustomer(item); setCreating(false); setError(''); }}>Select</button></li>)}</ul>}
-      {hasPermission(identity, 'customer.create') && <button type="button" className="secondary" onClick={() => { setCreating((value) => !value); setPendingCustomer(undefined); }}>{creating ? 'Cancel new customer' : '+ Create New Customer'}</button>}
-      {creating && <form className="stack reception-create" onSubmit={(event) => void createCustomer(event)}><label>First name<input name="firstName" required /></label><label>Last name<input name="lastName" required /></label><label>Phone<input name="phone" type="tel" required /></label><label>Email<input name="email" type="email" required /></label><button disabled={busy}>{busy ? 'Creating…' : pendingCustomer ? 'Create anyway' : 'Create customer'}</button></form>}
+    <h2>{t("New Booking")}</h2>
+    {error && <p role="alert" className="error">{t(error)}</p>}
+    {message && <p role="status">{t(message)}</p>}
+    <div className="reception-step"><span>1</span><h3>{t("Customer")}</h3></div>
+    {customer ? <div className="reception-selected"><strong>{customer.displayName}</strong><span>{customer.phone} · {customer.email}</span><button type="button" className="secondary" onClick={() => { setCustomer(undefined); setQuery(''); setCreating(false); }}>{t("Change customer")}</button></div> : <>
+      <label className="reception-search">{t("Search phone, customer name or email")}<input type="search" autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setResults([]); setSearching(Boolean(event.target.value.trim())); setPendingCustomer(undefined); }} placeholder={t("Phone number, name or email")} /></label>
+      {searching && <p role="status">{t("Searching customers…")}</p>}
+      {query.trim() && !searching && !results.length && !error && <p>{t("No customer found.")}</p>}
+      {!!results.length && <ul className="reception-results">{results.map((item) => <li key={item.id}><div><strong>{item.displayName}</strong><span>{item.phone} · {item.email}</span><small>{translateStatus(item.status)} {t("· Total visits:")} {item.completedVisitCount} {t("· Last visit:")} {item.lastCompletedVisit ? new Date(item.lastCompletedVisit).toLocaleDateString(locale()) : '—'}</small></div><button type="button" disabled={item.status !== 'ACTIVE'} onClick={() => { setCustomer(item); setCreating(false); setError(''); }}>{t("Select")}</button></li>)}</ul>}
+      {hasPermission(identity, 'customer.create') && <button type="button" className="secondary" onClick={() => { setCreating((value) => !value); setPendingCustomer(undefined); }}>{creating ? t('Cancel new customer') : t('+ Create New Customer')}</button>}
+      {creating && <form className="stack reception-create" onSubmit={(event) => void createCustomer(event)}><label>{t("First name")}<input name="firstName" required /></label><label>{t("Last name")}<input name="lastName" required /></label><label>{t("Phone")}<input name="phone" type="tel" required /></label><label>{t("Email")}<input name="email" type="email" required /></label><button disabled={busy}>{busy ? t('Creating…') : pendingCustomer ? t('Create anyway') : t('Create customer')}</button></form>}
     </>}
-    {customer && <><div className="reception-step"><span>2</span><h3>Service, date and time</h3></div><form className="stack reception-book-form" onSubmit={(event) => void createBooking(event)}><label>Choose services (in order)<select name="serviceIds" multiple required>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.durationMinutes} min</option>)}</select></label><label>Start time<input type="datetime-local" name="start" required /></label><button disabled={busy || !services.length}>{busy ? 'Checking…' : 'Check availability and confirm booking'}</button></form></>}
+    {customer && <><div className="reception-step"><span>2</span><h3>{t("Service, date and time")}</h3></div><form className="stack reception-book-form" onSubmit={(event) => void createBooking(event)}><label>{t("Choose services (in order)")}<select name="serviceIds" multiple required>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.durationMinutes} {t("min")}</option>)}</select></label><label>{t("Start time")}<input type="datetime-local" name="start" required /></label><button disabled={busy || !services.length}>{busy ? t('Checking…') : t('Check availability and confirm booking')}</button></form></>}
   </section>;
 }

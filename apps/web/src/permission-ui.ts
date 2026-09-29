@@ -86,9 +86,12 @@ const metadata: Record<string, readonly [string, string]> = {
 
 export function permissionUi(key: string, module = key.split('.')[0]): PermissionDisplay {
   const entry = metadata[key];
-  if (entry) return { label: entry[0], description: entry[1], group: permissionGroups[module] ?? 'Other / System' };
+  if (entry) {
+    const display = language() === 'zh' ? permissionZh[key] ?? entry : entry;
+    return { label: display[0], description: display[1], group: t(permissionGroups[module] ?? 'Other / System') };
+  }
   const words = key.split('.').filter(Boolean).join(' ').replaceAll('_', ' ');
-  return { label: words.replace(/^./, (letter) => letter.toUpperCase()) || 'Unknown permission', description: 'Permission description is not available yet.', group: permissionGroups[module] ?? 'Other / System' };
+  return { label: words.replace(/^./, (letter) => letter.toUpperCase()) || t('Unknown permission'), description: t('Permission description is not available yet.'), group: t(permissionGroups[module] ?? 'Other / System') };
 }
 
 export function matchesPermissionSearch(key: string, module: string, search: string): boolean {
@@ -97,3 +100,5 @@ export function matchesPermissionSearch(key: string, module: string, search: str
   const display = permissionUi(key, module);
   return `${display.label} ${display.description} ${key}`.toLowerCase().includes(query);
 }
+import { language, t } from './i18n.js';
+import { permissionZh } from './permission-zh.js';

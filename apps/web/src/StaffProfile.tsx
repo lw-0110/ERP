@@ -1,3 +1,5 @@
+import { apiFetch } from './api-fetch.js';
+import { t, translateStatus } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { getUserFriendlyError, readApiError } from './error-messages.js';
 
@@ -8,10 +10,10 @@ export function StaffProfile() {
   const [profile, setProfile] = useState<Profile>();
   const [error, setError] = useState('');
   useEffect(() => {
-    void fetch(`${api}/staff/me`, { credentials: 'include' }).then(async (response) => {
+    void apiFetch(`${api}/staff/me`, { credentials: 'include' }).then(async (response) => {
       if (!response.ok) throw new Error(getUserFriendlyError(await readApiError(response)));
       setProfile(await response.json());
     }).catch((cause: Error) => setError(cause.message));
   }, []);
-  return <section className="panel"><h2>My Profile</h2>{error && <p role="alert" className="error">{error}</p>}{!profile && !error && <p role="status">Loading…</p>}{profile && <dl><dt>Name</dt><dd>{profile.displayName}</dd><dt>Employee code</dt><dd>{profile.employeeCode}</dd><dt>Email</dt><dd>{profile.email}</dd><dt>Phone</dt><dd>{profile.phone}</dd><dt>Status</dt><dd>{profile.status}</dd></dl>}</section>;
+  return <section className="panel"><h2>{t("My Profile")}</h2>{error && <p role="alert" className="error">{t(error)}</p>}{!profile && !error && <p role="status">{t("Loading…")}</p>}{profile && <dl><dt>{t("Name")}</dt><dd>{profile.displayName}</dd><dt>{t("Employee code")}</dt><dd>{profile.employeeCode}</dd><dt>{t("Email")}</dt><dd>{profile.email}</dd><dt>{t("Phone")}</dt><dd>{profile.phone}</dd><dt>{t("Status")}</dt><dd>{translateStatus(profile.status)}</dd></dl>}</section>;
 }

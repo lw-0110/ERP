@@ -5,6 +5,7 @@ import type { TenantRequest } from '../business/tenant-request.js';
 import { fromNodeHeaders } from 'better-auth/node';
 import { auth } from '../auth/auth.js';
 import { prisma } from '../auth/prisma.js';
+import { localizeError, resolveLanguage } from '../i18n/localize.js';
 
 type IdentifiedRequest = TenantRequest & { requestId?: string };
 type Bucket = { count: number; resetAt: number };
@@ -28,7 +29,7 @@ export function requestSecurity(env: Environment) {
     if (unsafe && req.headers.cookie) {
       const origin = req.headers.origin;
       if ((origin && !allowedOrigins.has(origin)) || (env.NODE_ENV === 'production' && !origin)) {
-        res.status(403).json({ code: 'INVALID_ORIGIN', message: 'Request origin is not allowed.', requestId: request.requestId });
+        res.status(403).json({ code: 'INVALID_ORIGIN', message: resolveLanguage(req.headers['accept-language']) === 'zh' ? '请求来源不被允许。' : 'Request origin is not allowed.', requestId: request.requestId });
         return;
       }
     }
@@ -47,7 +48,7 @@ export function requestSecurity(env: Environment) {
       if (buckets.size > 10_000) for (const [entry, value] of buckets) if (value.resetAt <= now) buckets.delete(entry);
       if (bucket.count > max) {
         res.setHeader('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
-        res.status(429).json({ code: 'RATE_LIMITED', message: 'Too many requests. Try again later.', requestId: request.requestId });
+        res.status(429).json({ code: 'RATE_LIMITED', message: localizeError('RATE_LIMITED', resolveLanguage(req.headers['accept-language'])), requestId: request.requestId });
         return;
       }
     }

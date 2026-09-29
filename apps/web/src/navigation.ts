@@ -1,4 +1,5 @@
 import { hasPermission, type PermissionContext } from './permissions.js';
+import { t } from './i18n.js';
 
 export type AppArea =
   | 'dashboard' | 'profile'
@@ -53,18 +54,18 @@ export const navigationConfig: readonly NavigationGroup[] = [
 export function visibleNavigation(context: PermissionContext | undefined): NavigationGroup[] {
   return navigationConfig.map((group) => ({
     ...group,
-    label: group.id === 'booking' && !hasPermission(context, 'booking.read.all') ? 'Bookings'
-      : group.id === 'finance' && !hasPermission(context, 'payment.read.all')
-        ? hasPermission(context, 'payment.read.own') ? 'Payments' : 'Commission'
-        : group.label,
     items: group.items.filter((item) =>
       (!item.permissions || item.permissions.some((key) => hasPermission(context, key))) &&
       (!item.requiresAll || item.requiresAll.every((key) => hasPermission(context, key))) &&
       (!item.excludeWhen || !item.excludeWhen.some((key) => hasPermission(context, key))),
-    ),
+    ).map((item) => ({ ...item, label: t(item.label) })),
+    label: t(group.id === 'booking' && !hasPermission(context, 'booking.read.all') ? 'Bookings'
+      : group.id === 'finance' && !hasPermission(context, 'payment.read.all')
+        ? hasPermission(context, 'payment.read.own') ? 'Payments' : 'Commission'
+        : group.label),
   })).filter((group) => group.items.length > 0);
 }
 
 export function pageLabel(area: AppArea): string {
-  return navigationConfig.flatMap((group) => group.items).find((item) => item.id === area)?.label ?? 'Dashboard';
+  return t(navigationConfig.flatMap((group) => group.items).find((item) => item.id === area)?.label ?? 'Dashboard');
 }
